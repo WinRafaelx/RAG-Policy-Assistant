@@ -8,3 +8,4 @@ dist/
 build/
 postgres_data/
 *.docx
+data/eval/latest_results.json

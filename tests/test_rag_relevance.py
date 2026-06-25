@@ -70,3 +70,21 @@ def test_rag_falls_back_when_ollama_is_unavailable() -> None:
     assert answer.guardrails.refused is False
     assert "Ollama generation was unavailable" in answer.answer
     assert answer.citations
+
+
+def test_rag_answer_includes_inline_chunk_citation() -> None:
+    service = RagService(
+        FakeRelatedStore(),
+        retrieval_min_score=0.08,
+        ollama_base_url="http://localhost:11434",
+        ollama_default_model="qwen3.5:9b",
+        ollama_timeout_seconds=1.0,
+    )
+
+    answer = service.answer(
+        "How many annual leave days do full-time employees receive?",
+        top_k=3,
+        redacted_input=False,
+    )
+
+    assert "[policy_01_annual_leave.md:002]" in answer.answer

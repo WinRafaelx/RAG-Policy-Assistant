@@ -22,5 +22,5 @@ Use FastAPI for the HTTP API, section-aware Markdown chunking, E5-compatible emb
 ## Consequences
 
 - The default answer path is more conservative than a hosted LLM and may sound less natural.
-- Production deployment should add managed secrets, authentication, rate limiting, and a monitored LLM provider.
+- Production deployment should add managed secrets, identity-aware authentication, distributed rate limiting, and a monitored LLM provider.
 - Retrieval quality must be protected by the eval harness because corpus changes can alter relevance.

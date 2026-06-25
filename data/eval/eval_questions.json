@@ -58,5 +58,35 @@
     "question": "How long should operational records be retained if no specific regulatory period is listed?",
     "expected_sources": ["policy_17_records_retention.md"],
     "expected_terms": ["retention", "records"]
+  },
+  {
+    "id": "q011",
+    "question": "If I take a week off, whose approvals do I need for annual leave?",
+    "expected_sources": ["policy_01_annual_leave.md"],
+    "expected_terms": ["Line Manager", "Department Head"]
+  },
+  {
+    "id": "q012",
+    "question": "Which cabin can I book for a nine hour international flight?",
+    "expected_sources": ["policy_05_business_travel.md"],
+    "expected_terms": ["Business Class", "8 continuous hours"]
+  },
+  {
+    "id": "q013",
+    "question": "How many failed sign-in attempts lock an account?",
+    "expected_sources": ["policy_08_password_authentication.md"],
+    "expected_terms": ["5", "30 minutes"]
+  },
+  {
+    "id": "q014",
+    "question": "What needs to be prepared if a production deployment must be rolled back?",
+    "expected_sources": ["policy_15_software_change_management.md"],
+    "expected_terms": ["rollback", "15 minutes"]
+  },
+  {
+    "id": "q015",
+    "question": "What should happen to confidential papers when I leave my desk for more than 15 minutes?",
+    "expected_sources": ["policy_18_clean_desk_physical_security.md"],
+    "expected_terms": ["15-Minute Rule", "locked"]
   }
 ]

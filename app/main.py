@@ -1,8 +1,9 @@
 from time import perf_counter
 import logging
+import secrets
 from uuid import uuid4
 
-from fastapi import FastAPI, Response
+from fastapi import FastAPI, Header, HTTPException, Request, Response
 from fastapi.openapi.utils import get_openapi
 
 from app.chunking import load_policy_chunks
@@ -10,6 +11,7 @@ from app.config import get_settings
 from app.embeddings import SentenceTransformerEmbeddingProvider
 from app.guardrails import apply_input_guardrails, refusal_message
 from app.logging_config import configure_logging
+from app.observability import InMemoryRateLimiter, ServiceMetrics
 from app.rag import RagService
 from app.schemas import AskRequest, AskResponse, GuardrailInfo, HealthResponse, Telemetry
 from app.stores.pgvector_store import PgVectorStore
@@ -46,6 +48,8 @@ rag_service = RagService(
 )
 
 app = FastAPI(title=settings.app_name, version="0.1.0")
+metrics = ServiceMetrics()
+rate_limiter = InMemoryRateLimiter()
 
 
 def custom_openapi():
@@ -87,10 +91,17 @@ def health() -> HealthResponse:
 
 
 @app.post("/ask", response_model=AskResponse)
-def ask(request: AskRequest, response: Response) -> AskResponse:
+def ask(
+    request: AskRequest,
+    response: Response,
+    http_request: Request,
+    x_api_key: str | None = Header(default=None),
+) -> AskResponse:
     started = perf_counter()
     request_id = str(uuid4())
     response.headers["X-Request-ID"] = request_id
+    _authorize_request(x_api_key)
+    _check_rate_limit(http_request)
     input_guardrail = apply_input_guardrails(request.question)
 
     if input_guardrail.refused:
@@ -112,6 +123,7 @@ def ask(request: AskRequest, response: Response) -> AskResponse:
                 "top_k": request.top_k,
             },
         )
+        metrics.record_request(telemetry.latency_ms, input_guardrail.reason)
         return AskResponse(
             success=True,
             answer=answer,
@@ -155,6 +167,7 @@ def ask(request: AskRequest, response: Response) -> AskResponse:
             "refused": rag_answer.guardrails.refused,
         },
     )
+    metrics.record_request(telemetry.latency_ms, rag_answer.guardrails.reason)
     return AskResponse(
         success=True,
         answer=rag_answer.answer,
@@ -162,6 +175,27 @@ def ask(request: AskRequest, response: Response) -> AskResponse:
         guardrails=rag_answer.guardrails,
         telemetry=telemetry,
     )
+
+
+@app.get("/metrics")
+def service_metrics() -> Response:
+    return Response(
+        content=metrics.render_prometheus(settings.retrieval_backend),
+        media_type="text/plain; version=0.0.4",
+    )
+
+
+def _authorize_request(x_api_key: str | None) -> None:
+    if not settings.api_key:
+        return
+    if not x_api_key or not secrets.compare_digest(x_api_key, settings.api_key):
+        raise HTTPException(status_code=401, detail="Missing or invalid API key")
+
+
+def _check_rate_limit(request: Request) -> None:
+    client = request.client.host if request.client else "unknown"
+    if not rate_limiter.allow(client, settings.rate_limit_per_minute):
+        raise HTTPException(status_code=429, detail="Rate limit exceeded")
 
 
 def _telemetry(

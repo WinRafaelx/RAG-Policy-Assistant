@@ -4,7 +4,7 @@
 
 - Availability: `/health` returns `200` when the API can load the configured retrieval backend.
 - Latency: local deterministic `/ask` responses should usually complete under 500 ms after startup in TF-IDF mode.
-- Quality: eval gate should pass at least 9/10 grounded answers, 9/10 expected citation hits, 8/10 expected term hits, and 3/3 adversarial refusals.
+- Quality: eval gate should pass at least 90% grounded answers, 90% expected citation hits, 80% expected term hits, and 100% adversarial refusals.
 - Safety: no raw PII should appear in answers after output guardrails.
 
 ## Common Operations
@@ -18,8 +18,14 @@ docker compose up --build
 ### Run Tests
 
 ```bash
-pytest
+pytest --cov=app --cov-report=term-missing --cov-fail-under=80
 python scripts/eval.py
+```
+
+### Check Metrics
+
+```bash
+curl http://127.0.0.1:8000/metrics
 ```
 
 ### Rebuild The pgvector Index
@@ -42,3 +48,9 @@ docker compose up --build
 1. Check `guardrails.reason`.
 2. Confirm whether the request matches prompt injection, sensitive customer data, policy bypass, or low retrieval confidence.
 3. Add a regression test if the refusal was incorrect.
+
+### Investigate Traffic Spikes
+
+1. Check `/metrics` request and refusal counts.
+2. Review structured logs by `request_id`, backend, and refusal reason.
+3. If local IP-based in-memory rate limiting is insufficient, move enforcement to authenticated identity plus an API gateway or shared store.

@@ -20,6 +20,8 @@ class Settings(BaseSettings):
     ollama_base_url: str = "http://localhost:11434"
     ollama_default_model: str = "qwen3.5:9b"
     ollama_timeout_seconds: float = 60.0
+    api_key: str | None = None
+    rate_limit_per_minute: int = 60
 
     model_config = SettingsConfigDict(env_file=".env", env_prefix="TTB_")
 

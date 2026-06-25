@@ -84,7 +84,10 @@ class RagService:
                 retrieval_scores=[round(result.score, 4) for result in results],
             )
 
-        answer = self._generate_answer(question, relevant, llm_provider)
+        answer = self._with_inline_citation(
+            self._generate_answer(question, relevant, llm_provider),
+            relevant[0].chunk.chunk_id,
+        )
         safe_answer, redacted_output = apply_output_guardrails(answer)
         citations = [
             Citation(
@@ -128,6 +131,12 @@ class RagService:
                     "response used the deterministic extractive generator."
                 )
         return self._extractive_generator.generate(question, relevant)
+
+    def _with_inline_citation(self, answer: str, chunk_id: str) -> str:
+        citation = f"[{chunk_id}]"
+        if citation in answer:
+            return answer
+        return f"{answer.rstrip()} {citation}"
 
 
 def _has_grounding_signal(question: str, results: list[SearchResult]) -> bool:

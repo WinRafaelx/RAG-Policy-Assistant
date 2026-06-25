@@ -25,7 +25,7 @@ PROMPT_INJECTION_PATTERNS = (
 
 SENSITIVE_OUT_OF_SCOPE_PATTERNS = (
     re.compile(
-        r"\b(customer|cif|account|card)\b.*\b(balance|account|transaction|profile|phone|address|limit)\b",
+        r"\b(customer|cif|account|card)\b.*\b(balance|account|transactions?|profile|phone|address|limit)\b",
         re.IGNORECASE,
     ),
     re.compile(r"\baccount\s+balance\b", re.IGNORECASE),

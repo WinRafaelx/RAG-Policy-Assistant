@@ -116,6 +116,7 @@ This mode is useful for unit tests and debugging, but the Docker Compose path is
 
 ```bash
 pytest
+pytest --cov=app --cov-report=term-missing --cov-fail-under=80
 ```
 
 The tests cover:
@@ -127,6 +128,9 @@ The tests cover:
 - `/ask` integration behavior
 - request validation
 - optional pgvector upsert/search integration when `TTB_TEST_DATABASE_URL` is set
+- optional API key authentication
+- IP-based rate limiting
+- metrics output
 
 ## Evaluation Harness
 
@@ -134,7 +138,7 @@ The tests cover:
 python scripts/eval.py
 ```
 
-The harness runs 10 grounded questions and 3 adversarial questions, then prints answer, citation, expected-term, and refusal counts. It exits non-zero unless the configured thresholds pass, so it can be used as a CI regression gate. Current expected local result is 10/10 grounded answers, 10/10 citation hits, 10/10 expected-term hits, and 3/3 adversarial refusals.
+The harness runs 15 grounded questions and 7 adversarial questions, then prints answer, citation, expected-term, refusal, and retrieval-score summaries. It exits non-zero unless the configured thresholds pass, so it can be used as a CI regression gate. It also writes a machine-readable report to `data/eval/latest_results.json`, which is ignored by git. Current expected local result is 15/15 grounded answers, 15/15 citation hits, at least 12/15 expected-term hits, and 7/7 adversarial refusals.
 
 ## API
 
@@ -188,6 +192,8 @@ Optional request fields:
 
 If `llm_provider` is omitted, the service uses the deterministic extractive answer generator. Currently `ollama` is the only accepted LLM provider. The model is configured by `TTB_OLLAMA_DEFAULT_MODEL`.
 
+If `TTB_API_KEY` is set, `POST /ask` requires the same value in the `X-API-Key` header. If `TTB_API_KEY` is unset, local development remains open. `TTB_RATE_LIMIT_PER_MINUTE` controls the lightweight in-memory IP-based request limiter for `/ask`; without authentication this is not a user identity or per-user quota. Production should use authenticated user/service identity plus an API gateway or shared store such as Redis for distributed rate limiting.
+
 ## Guardrails
 
 Implemented guardrails:
@@ -197,6 +203,8 @@ Implemented guardrails:
 - Refuses customer-specific account or balance questions.
 - Refuses requests to bypass approval or policy controls.
 - Refuses when retrieval confidence is below the configured threshold.
+- Supports optional API key protection for `/ask`.
+- Applies a configurable in-memory IP-based rate limit to `/ask`.
 - Logs redacted request metadata rather than raw sensitive values.
 - Returns `X-Request-ID` and includes request IDs in structured logs for correlation.
 
@@ -209,12 +217,17 @@ The service writes structured JSON logs for refusals and completed requests, inc
 - estimated input/output token counts
 - retrieved chunk count
 - refusal status and reason
+- retrieval scores and cited chunk IDs
+
+The service also exposes `GET /metrics` in Prometheus text format with request count, refusal counts by reason, average latency, and the active retrieval backend.
 
 ## Secrets and AI Providers
 
 No AI API keys are required. No secrets are committed.
 
 Docker Compose uses a local development database password default through environment interpolation. In a real deployment this would come from a secret manager or deployment environment, not source-controlled compose defaults.
+
+`TTB_API_KEY` is optional and must be supplied through the environment if API-key protection is enabled. No real API keys, model provider keys, or production database passwords are committed.
 
 Optional provider variables are documented in `.env.example` for future use only:
 
@@ -253,15 +266,30 @@ Local Ollama generation is supported without API keys. It is optional per reques
 - Used deterministic answer synthesis instead of external LLM calls so the project can be evaluated without private keys.
 - Implemented a lightweight eval harness with citation and term checks instead of an LLM judge.
 - Kept Thai support to UTF-8 compatibility only because full bilingual retrieval was not required by the brief.
+- Used optional API-key auth and an in-memory IP-based rate limiter to demonstrate stabilization controls without making local review harder. A real deployment should enforce identity-aware access and distributed rate limiting.
+
+## Rubric Coverage
+
+| Requirement | Evidence |
+| --- | --- |
+| Ingest, chunk, embed, index | `app/chunking.py`, `app/embeddings.py`, `app/stores/pgvector_store.py`, `scripts/ingest.py`, `docker-compose.yml` |
+| Retrieval + grounded generation | `app/rag.py`, `app/generation.py`, structured citations and inline chunk IDs |
+| HTTP API and validation | `app/main.py`, `app/schemas.py`, `tests/test_ask_api.py` |
+| Guardrails | `app/guardrails.py`, `tests/test_guardrails.py`, adversarial eval set |
+| Observability | `app/logging_config.py`, `app/observability.py`, response telemetry, `GET /metrics` |
+| Tests and CI | `tests/`, `.github/workflows/ci.yml`, coverage gate, pgvector CI service, dependency audit |
+| Eval harness | `scripts/eval.py`, `data/eval/eval_questions.json`, `data/eval/adversarial_questions.json` |
+| Docker run path | `Dockerfile`, `docker-compose.yml` |
+| Docs and judgment | README, `docs/ADR-001-rag-architecture.md`, `docs/threat-model.md`, `docs/slo-runbook.md` |
 
 ## What I Would Do With More Time
 
 - Add Azure AI Search behind the same retrieval interface.
 - Add optional OpenAI/Azure OpenAI answer generation with strict context-only prompting.
 - Add Thai and bilingual corpora, Thai PII patterns, and multilingual embedding evaluation.
-- Add CI with tests, coverage, linting, and dependency audit.
-- Add coverage reporting, linting, and dependency audit to CI.
-- Add request rate limiting and authentication for a deployed internal service.
+- Add linting and static type checks to CI.
+- Replace IP-based in-memory rate limiting with identity-aware Redis or API gateway limits for multi-instance deployments.
+- Replace simple API-key protection with the bank's standard identity-aware service authentication.
 
 ## Operational Notes
 
@@ -272,4 +300,3 @@ Local Ollama generation is supported without API keys. It is optional per reques
 ## AI-Assisted Development Disclosure
 
 AI assistance was used to help plan the implementation, draft synthetic evaluation questions, and scaffold code and documentation. All content is synthetic and reviewed for the take-home scope. No real secrets or confidential bank data were shared.
-"# RAG-Policy-Assistant" 
