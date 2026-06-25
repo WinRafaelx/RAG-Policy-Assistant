@@ -37,6 +37,7 @@ class AskResponse(BaseModel):
 
 class HealthResponse(BaseModel):
     status: str
+    retrieval_backend: str
     documents_loaded: int
     chunks_loaded: int
     local_mode: bool

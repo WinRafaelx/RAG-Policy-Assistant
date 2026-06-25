@@ -1,10 +1,10 @@
 __pycache__/
+*.pyc
 .pytest_cache/
 .venv/
 venv/
 .env
-*.pyc
-dist/
-build/
+.git/
+.gitignore
+AI-COE_SoftwareEngineer_Test.docx
 postgres_data/
-*.docx

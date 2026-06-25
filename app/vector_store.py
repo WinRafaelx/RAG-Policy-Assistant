@@ -1,9 +1,9 @@
 from collections import Counter
-from dataclasses import dataclass
 import math
 import re
 
 from app.chunking import PolicyChunk
+from app.stores.base import SearchResult
 
 
 TOKEN_PATTERN = re.compile(r"[A-Za-z0-9]+")
@@ -34,12 +34,6 @@ STOP_WORDS = {
     "who",
     "with",
 }
-
-
-@dataclass(frozen=True)
-class SearchResult:
-    chunk: PolicyChunk
-    score: float
 
 
 class TfidfVectorStore:

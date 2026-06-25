@@ -6,27 +6,48 @@ from fastapi import FastAPI
 
 from app.chunking import load_policy_chunks
 from app.config import get_settings
+from app.embeddings import SentenceTransformerEmbeddingProvider
 from app.guardrails import apply_input_guardrails, refusal_message
 from app.logging_config import configure_logging
 from app.rag import RagService
 from app.schemas import AskRequest, AskResponse, GuardrailInfo, HealthResponse, Telemetry
+from app.stores.pgvector_store import PgVectorStore
 from app.vector_store import TfidfVectorStore
 
 
 configure_logging()
 logger = logging.getLogger("ttb_policy_assistant")
 settings = get_settings()
-chunks = load_policy_chunks(settings.policies_dir)
-rag_service = RagService(TfidfVectorStore(chunks), settings.retrieval_min_score)
+retrieval_store = None
+if settings.retrieval_backend == "pgvector":
+    if not settings.database_url:
+        raise RuntimeError("TTB_DATABASE_URL is required when TTB_RETRIEVAL_BACKEND=pgvector")
+    embedding_provider = SentenceTransformerEmbeddingProvider(settings.embedding_model)
+    if embedding_provider.dimension != settings.embedding_dimension:
+        raise RuntimeError(
+            f"Embedding model dimension {embedding_provider.dimension} does not match "
+            f"configured dimension {settings.embedding_dimension}"
+        )
+    pgvector_store = PgVectorStore(settings.database_url, embedding_provider)
+    if settings.bootstrap_on_startup:
+        pgvector_store.bootstrap_if_empty(settings.policies_dir)
+    retrieval_store = pgvector_store
+else:
+    chunks = load_policy_chunks(settings.policies_dir)
+    retrieval_store = TfidfVectorStore(chunks)
+
+rag_service = RagService(retrieval_store, settings.retrieval_min_score)
 
 app = FastAPI(title=settings.app_name, version="0.1.0")
 
 
 @app.get("/health", response_model=HealthResponse)
 def health() -> HealthResponse:
+    chunks = rag_service.chunks
     documents = {chunk.document for chunk in chunks}
     return HealthResponse(
         status="ok",
+        retrieval_backend=settings.retrieval_backend,
         documents_loaded=len(documents),
         chunks_loaded=len(chunks),
         local_mode=settings.local_mode,

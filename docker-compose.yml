@@ -1,0 +1,34 @@
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: ttb_policy_assistant
+      POSTGRES_USER: ttb
+      POSTGRES_PASSWORD: ttb_dev_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ttb -d ttb_policy_assistant"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  api:
+    build: .
+    environment:
+      TTB_RETRIEVAL_BACKEND: pgvector
+      TTB_DATABASE_URL: postgresql://ttb:ttb_dev_password@db:5432/ttb_policy_assistant
+      TTB_POLICIES_DIR: policies
+      TTB_BOOTSTRAP_ON_STARTUP: "true"
+      TTB_LOCAL_MODE: "true"
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  postgres_data:

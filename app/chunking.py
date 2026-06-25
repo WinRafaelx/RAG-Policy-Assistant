@@ -23,7 +23,7 @@ def load_policy_chunks(policies_dir: Path) -> list[PolicyChunk]:
 
 
 def chunk_markdown_file(file_path: Path, target_chars: int = 1200) -> list[PolicyChunk]:
-    text = file_path.read_text(encoding="utf-8")
+    text = _strip_synthetic_footer(file_path.read_text(encoding="utf-8"))
     sections = _split_sections(text)
     chunks: list[PolicyChunk] = []
 
@@ -40,6 +40,16 @@ def chunk_markdown_file(file_path: Path, target_chars: int = 1200) -> list[Polic
             )
 
     return chunks
+
+
+def _strip_synthetic_footer(text: str) -> str:
+    text = re.sub(r"\n\*{3}\s*\n*", "\n", text)
+    return re.sub(
+        r"\n?Synthetic training document\. Not an official ttb policy\.\s*$",
+        "",
+        text,
+        flags=re.IGNORECASE,
+    ).strip()
 
 
 def _split_sections(text: str) -> list[tuple[str, str]]:

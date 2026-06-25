@@ -13,28 +13,48 @@ The implementation is English-first because the brief did not explicitly require
 ```text
 Markdown policies
   -> section-aware chunking
-  -> pure-Python TF-IDF vector store
-  -> top-k retrieval
+  -> multilingual E5 embeddings
+  -> PostgreSQL + pgvector index
+  -> top-k vector retrieval
   -> deterministic grounded answer synthesis
   -> citations, guardrails, telemetry
   -> FastAPI POST /ask
 ```
 
-The default mode is local and deterministic. It does not require OpenAI, Azure OpenAI, Azure AI Search, FAISS, or pgvector. This keeps the submission runnable on a clean machine without sharing private API keys.
+The primary Docker path uses PostgreSQL with pgvector, matching the exam requirement to chunk, embed, and index into a vector store. The answer synthesis is still deterministic and local, so no OpenAI or Azure key is required. A TF-IDF fallback remains available for fast local tests and offline debugging.
 
-## Run Locally
+## Run With Docker
 
 ```bash
-python -m venv .venv
-.venv\Scripts\activate
-pip install -r requirements.txt
-uvicorn app.main:app --reload
+docker compose up --build
 ```
 
 Open:
 
 ```text
 http://127.0.0.1:8000/docs
+```
+
+This single command starts:
+
+- PostgreSQL with the pgvector extension
+- the FastAPI service
+- automatic schema creation
+- automatic policy chunking, embedding, and ingestion when the table is empty
+
+The first build can take several minutes because Docker installs Python dependencies and downloads the local embedding model:
+
+```text
+intfloat/multilingual-e5-base
+```
+
+E5 is retrieval-oriented and multilingual. The implementation embeds stored policy chunks with the `passage:` prefix and user questions with the `query:` prefix, as recommended by the E5 model card. The pgvector column uses `vector(768)`, matching `multilingual-e5-base`.
+
+If you previously started this project with the old 384-dimensional demo model, reset the local Postgres volume once before rebuilding:
+
+```bash
+docker compose down -v
+docker compose up --build
 ```
 
 Health check:
@@ -50,6 +70,20 @@ curl -X POST http://127.0.0.1:8000/ask ^
   -H "Content-Type: application/json" ^
   -d "{\"question\":\"How many annual leave days do full-time employees receive?\",\"top_k\":3}"
 ```
+
+## Local Fallback Mode
+
+For fast local development without Docker or model downloads, use the TF-IDF fallback:
+
+```bash
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+$env:TTB_RETRIEVAL_BACKEND="tfidf"
+uvicorn app.main:app --reload
+```
+
+This mode is useful for unit tests and debugging, but the Docker Compose path is the pgvector implementation intended for exam review.
 
 ## Tests
 
@@ -73,13 +107,6 @@ python scripts/eval.py
 ```
 
 The harness runs 10 grounded questions and 3 adversarial questions, then prints answer, citation, expected-term, and refusal counts. It is intentionally simple and reproducible rather than model-judge based.
-
-## Docker
-
-```bash
-docker build -t ttb-policy-assistant .
-docker run --rm -p 8000:8000 ttb-policy-assistant
-```
 
 ## API
 
@@ -146,7 +173,9 @@ The service writes structured JSON logs for refusals and completed requests, inc
 
 ## Secrets and AI Providers
 
-No API keys are required. No secrets are committed.
+No AI API keys are required. No secrets are committed.
+
+Docker Compose includes a local development database password for the containerized Postgres service. In a real deployment this would come from a secret manager or deployment environment, not source-controlled compose defaults.
 
 Optional provider variables are documented in `.env.example` for future use only:
 
@@ -159,9 +188,27 @@ AZURE_OPENAI_DEPLOYMENT
 
 If real LLM generation were added, the retrieval and guardrail layers would remain outside the model call, and the model would receive only redacted input plus retrieved policy context.
 
+## Retrieval Backends
+
+`TTB_RETRIEVAL_BACKEND=pgvector`
+
+- Used by `docker compose up --build`
+- Embeds chunks with `intfloat/multilingual-e5-base`
+- Stores chunk text, metadata, and `vector(768)` embeddings in PostgreSQL
+- Searches with pgvector cosine distance using `<=>`
+- Uses an HNSW index with `vector_cosine_ops`
+
+`TTB_RETRIEVAL_BACKEND=tfidf`
+
+- Used by local tests by default
+- Requires no database
+- Provides deterministic fallback retrieval
+
 ## Trade-Offs
 
-- Used TF-IDF retrieval instead of Azure AI Search, pgvector, or FAISS to keep setup reliable and local.
+- Used pgvector over Azure AI Search or FAISS because PostgreSQL is a common corporate operational baseline and keeps chunk text, metadata, and embeddings together.
+- Used `intfloat/multilingual-e5-base` because it is retrieval-oriented, multilingual, and lighter than larger 1024-dimensional alternatives like BGE-M3 or multilingual E5 large.
+- Kept TF-IDF retrieval as a fallback so local tests can run without Docker or model downloads.
 - Used deterministic answer synthesis instead of external LLM calls so the project can be evaluated without private keys.
 - Implemented a lightweight eval harness with citation and term checks instead of an LLM judge.
 - Kept Thai support to UTF-8 compatibility only because full bilingual retrieval was not required by the brief.

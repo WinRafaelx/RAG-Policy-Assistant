@@ -9,9 +9,14 @@ class Settings(BaseSettings):
     app_name: str = "ttb Policy Assistant"
     local_mode: bool = True
     policies_dir: Path = Field(default=Path("policies"))
+    retrieval_backend: str = "tfidf"
     retrieval_min_score: float = 0.08
     default_top_k: int = 3
     max_top_k: int = 5
+    bootstrap_on_startup: bool = False
+    database_url: str | None = None
+    embedding_model: str = "intfloat/multilingual-e5-base"
+    embedding_dimension: int = 768
 
     model_config = SettingsConfigDict(env_file=".env", env_prefix="TTB_")
 

@@ -43,6 +43,20 @@ def test_ask_refuses_adversarial_prompt() -> None:
     assert body["citations"] == []
 
 
+def test_ask_refuses_unrelated_general_question() -> None:
+    response = client.post(
+        "/ask",
+        json={"question": "hello what is science ?", "top_k": 3},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["success"] is True
+    assert body["guardrails"]["refused"] is True
+    assert body["guardrails"]["reason"] == "out_of_scope"
+    assert body["citations"] == []
+
+
 def test_ask_validates_empty_question() -> None:
     response = client.post("/ask", json={"question": "", "top_k": 3})
 
