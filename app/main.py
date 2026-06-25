@@ -2,7 +2,7 @@ from time import perf_counter
 import logging
 from uuid import uuid4
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
 from fastapi.openapi.utils import get_openapi
 
 from app.chunking import load_policy_chunks
@@ -87,9 +87,10 @@ def health() -> HealthResponse:
 
 
 @app.post("/ask", response_model=AskResponse)
-def ask(request: AskRequest) -> AskResponse:
+def ask(request: AskRequest, response: Response) -> AskResponse:
     started = perf_counter()
     request_id = str(uuid4())
+    response.headers["X-Request-ID"] = request_id
     input_guardrail = apply_input_guardrails(request.question)
 
     if input_guardrail.refused:
@@ -107,6 +108,8 @@ def ask(request: AskRequest) -> AskResponse:
                 "request_id": request_id,
                 "reason": input_guardrail.reason,
                 "latency_ms": telemetry.latency_ms,
+                "retrieval_backend": settings.retrieval_backend,
+                "top_k": request.top_k,
             },
         )
         return AskResponse(
@@ -143,6 +146,12 @@ def ask(request: AskRequest) -> AskResponse:
             "input_tokens": telemetry.input_tokens,
             "output_tokens": telemetry.output_tokens,
             "retrieved_chunks": telemetry.retrieved_chunks,
+            "retrieval_backend": settings.retrieval_backend,
+            "top_k": request.top_k,
+            "llm_provider": request.llm_provider or "extractive",
+            "citation_chunk_ids": [citation.chunk_id for citation in rag_answer.citations],
+            "retrieval_scores": rag_answer.retrieval_scores,
+            "guardrail_reason": rag_answer.guardrails.reason,
             "refused": rag_answer.guardrails.refused,
         },
     )

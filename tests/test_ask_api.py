@@ -22,6 +22,7 @@ def test_ask_returns_grounded_answer_with_citations() -> None:
     )
 
     assert response.status_code == 200
+    assert response.headers["x-request-id"]
     body = response.json()
     assert body["success"] is True
     assert body["guardrails"]["refused"] is False

@@ -4,23 +4,38 @@ import re
 
 EMAIL_PATTERN = re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", re.IGNORECASE)
 PHONE_PATTERN = re.compile(r"\b(?:\+?66|0)\d{1,2}[-\s]?\d{3}[-\s]?\d{4}\b")
-LONG_NUMBER_PATTERN = re.compile(r"\b\d{8,16}\b")
+THAI_NATIONAL_ID_PATTERN = re.compile(r"\b\d[-\s]?\d{4}[-\s]?\d{5}[-\s]?\d{2}[-\s]?\d\b")
+CREDIT_CARD_PATTERN = re.compile(r"\b(?:\d[ -]?){13,19}\b")
+LABELED_IDENTIFIER_PATTERN = re.compile(
+    r"\b(?:customer|cif|account|employee|staff|id)\s*(?:id|number|no\.?|#)?\s*[:#-]?\s*\d{4,20}\b",
+    re.IGNORECASE,
+)
+LONG_NUMBER_PATTERN = re.compile(r"\b\d{8,20}\b")
 
 PROMPT_INJECTION_PATTERNS = (
     re.compile(r"\bignore\b.*\b(instruction|instructions|rules|policy|policies)\b", re.IGNORECASE),
+    re.compile(r"\bforget\b.*\b(instruction|instructions|rules|policy|policies)\b", re.IGNORECASE),
+    re.compile(r"\boverride\b.*\b(instruction|instructions|rules|policy|policies)\b", re.IGNORECASE),
     re.compile(r"\b(system|developer)\s+prompt\b", re.IGNORECASE),
+    re.compile(r"\b(system|developer)\s+(instruction|instructions|message|messages)\b", re.IGNORECASE),
     re.compile(r"\bprint\b.*\b(prompt|hidden|secret)\b", re.IGNORECASE),
     re.compile(r"\breveal\b.*\b(prompt|hidden|secret)\b", re.IGNORECASE),
+    re.compile(r"\btranslate\b.*\b(system|developer)\s+prompt\b", re.IGNORECASE),
 )
 
 SENSITIVE_OUT_OF_SCOPE_PATTERNS = (
-    re.compile(r"\bcustomer\b.*\b(balance|account|transaction|profile|phone|address)\b", re.IGNORECASE),
+    re.compile(
+        r"\b(customer|cif|account|card)\b.*\b(balance|account|transaction|profile|phone|address|limit)\b",
+        re.IGNORECASE,
+    ),
     re.compile(r"\baccount\s+balance\b", re.IGNORECASE),
+    re.compile(r"\b(card|credit\s+card)\b.*\b(number|limit|balance)\b", re.IGNORECASE),
 )
 
 POLICY_BYPASS_PATTERNS = (
     re.compile(r"\b(bypass|avoid|evade|skip)\b.*\b(approval|control|policy|review)\b", re.IGNORECASE),
     re.compile(r"\bhow\b.*\b(bypass|avoid|evade|skip)\b", re.IGNORECASE),
+    re.compile(r"\bavoid\b.*\b(kyc|aml|escalation|screening)\b", re.IGNORECASE),
 )
 
 
@@ -35,6 +50,9 @@ class GuardrailResult:
 def redact_pii(text: str) -> tuple[str, bool]:
     redacted = EMAIL_PATTERN.sub("[REDACTED_EMAIL]", text)
     redacted = PHONE_PATTERN.sub("[REDACTED_PHONE]", redacted)
+    redacted = THAI_NATIONAL_ID_PATTERN.sub("[REDACTED_THAI_ID]", redacted)
+    redacted = CREDIT_CARD_PATTERN.sub("[REDACTED_CARD]", redacted)
+    redacted = LABELED_IDENTIFIER_PATTERN.sub("[REDACTED_IDENTIFIER]", redacted)
     redacted = LONG_NUMBER_PATTERN.sub("[REDACTED_NUMBER]", redacted)
     return redacted, redacted != text
 

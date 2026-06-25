@@ -4,7 +4,7 @@ services:
     environment:
       POSTGRES_DB: ttb_policy_assistant
       POSTGRES_USER: ttb
-      POSTGRES_PASSWORD: ttb_dev_password
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ttb_local_dev_password}
     ports:
       - "5432:5432"
     volumes:
@@ -20,7 +20,7 @@ services:
     build: .
     environment:
       TTB_RETRIEVAL_BACKEND: pgvector
-      TTB_DATABASE_URL: postgresql://ttb:ttb_dev_password@db:5432/ttb_policy_assistant
+      TTB_DATABASE_URL: postgresql://ttb:${POSTGRES_PASSWORD:-ttb_local_dev_password}@db:5432/ttb_policy_assistant
       TTB_POLICIES_DIR: policies
       TTB_BOOTSTRAP_ON_STARTUP: "true"
       TTB_LOCAL_MODE: "true"

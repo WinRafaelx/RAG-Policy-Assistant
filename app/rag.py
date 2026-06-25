@@ -37,6 +37,7 @@ class RagAnswer:
     citations: list[Citation]
     guardrails: GuardrailInfo
     retrieved_chunks: int
+    retrieval_scores: list[float]
 
 
 class RagService:
@@ -80,6 +81,7 @@ class RagService:
                     reason="out_of_scope",
                 ),
                 retrieved_chunks=0,
+                retrieval_scores=[round(result.score, 4) for result in results],
             )
 
         answer = self._generate_answer(question, relevant, llm_provider)
@@ -102,6 +104,7 @@ class RagService:
                 refused=False,
             ),
             retrieved_chunks=len(relevant),
+            retrieval_scores=[round(result.score, 4) for result in relevant],
         )
 
     def _generate_answer(

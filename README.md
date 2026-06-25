@@ -23,6 +23,12 @@ Markdown policies
 
 The primary Docker path uses PostgreSQL with pgvector, matching the exam requirement to chunk, embed, and index into a vector store. The answer synthesis is still deterministic and local, so no OpenAI or Azure key is required. A TF-IDF fallback remains available for fast local tests and offline debugging.
 
+## Chunking Strategy
+
+The corpus uses short, structured Markdown policy documents with clear headings, so the chunker splits by Markdown sections instead of fixed token windows. Each chunk keeps its source document, section title, and stable chunk ID for citations.
+
+Token overlap is intentionally not used by default. For this corpus, section-aware chunks preserve semantic boundaries and keep citations cleaner. Overlap is more useful for books, long PDFs, transcripts, or poorly structured text where an answer may cross an arbitrary chunk boundary. If the corpus later includes long unstructured documents, the next step would be paragraph or token-window splitting with a small overlap, for example 10-20%.
+
 ## Run With Docker
 
 ```bash
@@ -120,6 +126,7 @@ The tests cover:
 - out-of-scope sensitive-data refusal
 - `/ask` integration behavior
 - request validation
+- optional pgvector upsert/search integration when `TTB_TEST_DATABASE_URL` is set
 
 ## Evaluation Harness
 
@@ -127,7 +134,7 @@ The tests cover:
 python scripts/eval.py
 ```
 
-The harness runs 10 grounded questions and 3 adversarial questions, then prints answer, citation, expected-term, and refusal counts. It is intentionally simple and reproducible rather than model-judge based.
+The harness runs 10 grounded questions and 3 adversarial questions, then prints answer, citation, expected-term, and refusal counts. It exits non-zero unless the configured thresholds pass, so it can be used as a CI regression gate. Current expected local result is 10/10 grounded answers, 10/10 citation hits, 10/10 expected-term hits, and 3/3 adversarial refusals.
 
 ## API
 
@@ -191,6 +198,7 @@ Implemented guardrails:
 - Refuses requests to bypass approval or policy controls.
 - Refuses when retrieval confidence is below the configured threshold.
 - Logs redacted request metadata rather than raw sensitive values.
+- Returns `X-Request-ID` and includes request IDs in structured logs for correlation.
 
 ## Observability
 
@@ -206,7 +214,7 @@ The service writes structured JSON logs for refusals and completed requests, inc
 
 No AI API keys are required. No secrets are committed.
 
-Docker Compose includes a local development database password for the containerized Postgres service. In a real deployment this would come from a secret manager or deployment environment, not source-controlled compose defaults.
+Docker Compose uses a local development database password default through environment interpolation. In a real deployment this would come from a secret manager or deployment environment, not source-controlled compose defaults.
 
 Optional provider variables are documented in `.env.example` for future use only:
 
@@ -248,12 +256,18 @@ Local Ollama generation is supported without API keys. It is optional per reques
 
 ## What I Would Do With More Time
 
-- Add Azure AI Search or pgvector indexing behind the same retrieval interface.
+- Add Azure AI Search behind the same retrieval interface.
 - Add optional OpenAI/Azure OpenAI answer generation with strict context-only prompting.
 - Add Thai and bilingual corpora, Thai PII patterns, and multilingual embedding evaluation.
 - Add CI with tests, coverage, linting, and dependency audit.
-- Add an ADR, threat model, SLOs, and operational runbook.
+- Add coverage reporting, linting, and dependency audit to CI.
 - Add request rate limiting and authentication for a deployed internal service.
+
+## Operational Notes
+
+- [Architecture ADR](docs/ADR-001-rag-architecture.md)
+- [Threat model](docs/threat-model.md)
+- [SLO and runbook](docs/slo-runbook.md)
 
 ## AI-Assisted Development Disclosure
 
