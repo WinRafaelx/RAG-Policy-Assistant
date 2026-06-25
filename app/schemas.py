@@ -1,9 +1,32 @@
-from pydantic import BaseModel, Field
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class AskRequest(BaseModel):
     question: str = Field(..., min_length=3, max_length=1000)
     top_k: int = Field(default=3, ge=1, le=5)
+    llm_provider: Literal["ollama"] | None = Field(
+        default=None,
+        description=(
+            "Optional answer-generation provider. Leave null to use the default "
+            "deterministic extractive answer generator, which requires no LLM or "
+            "API key. Set to 'ollama' only when a local Ollama server is running "
+            "and TTB_OLLAMA_BASE_URL / TTB_OLLAMA_DEFAULT_MODEL are configured. "
+            "Retrieval, guardrails, grounding checks, citations, and output "
+            "redaction still run outside the LLM."
+        ),
+    )
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "question": "string",
+                "top_k": 3,
+                "llm_provider": None,
+            }
+        }
+    )
 
 
 class Citation(BaseModel):

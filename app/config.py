@@ -17,6 +17,9 @@ class Settings(BaseSettings):
     database_url: str | None = None
     embedding_model: str = "intfloat/multilingual-e5-base"
     embedding_dimension: int = 768
+    ollama_base_url: str = "http://localhost:11434"
+    ollama_default_model: str = "qwen3.5:9b"
+    ollama_timeout_seconds: float = 60.0
 
     model_config = SettingsConfigDict(env_file=".env", env_prefix="TTB_")
 

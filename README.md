@@ -71,6 +71,27 @@ curl -X POST http://127.0.0.1:8000/ask ^
   -d "{\"question\":\"How many annual leave days do full-time employees receive?\",\"top_k\":3}"
 ```
 
+Ask with local Ollama answer generation:
+
+```bash
+curl -X POST http://127.0.0.1:8000/ask ^
+  -H "Content-Type: application/json" ^
+  -d "{\"question\":\"How many annual leave days do full-time employees receive?\",\"top_k\":3,\"llm_provider\":\"ollama\"}"
+```
+
+When running through Docker Compose, the API container calls Ollama on your host at:
+
+```text
+http://host.docker.internal:11434
+```
+
+Make sure Ollama is running locally and the model exists before using `llm_provider`:
+
+```bash
+ollama pull qwen3.5:9b
+ollama serve
+```
+
 ## Local Fallback Mode
 
 For fast local development without Docker or model downloads, use the TF-IDF fallback:
@@ -150,6 +171,16 @@ Response:
 }
 ```
 
+Optional request fields:
+
+```json
+{
+  "llm_provider": "ollama"
+}
+```
+
+If `llm_provider` is omitted, the service uses the deterministic extractive answer generator. Currently `ollama` is the only accepted LLM provider. The model is configured by `TTB_OLLAMA_DEFAULT_MODEL`.
+
 ## Guardrails
 
 Implemented guardrails:
@@ -187,6 +218,8 @@ AZURE_OPENAI_DEPLOYMENT
 ```
 
 If real LLM generation were added, the retrieval and guardrail layers would remain outside the model call, and the model would receive only redacted input plus retrieved policy context.
+
+Local Ollama generation is supported without API keys. It is optional per request. Guardrails, retrieval, out-of-scope checks, output redaction, and citations still run outside the LLM. The LLM receives only the redacted user question and retrieved policy chunks.
 
 ## Retrieval Backends
 

@@ -2,6 +2,7 @@ from dataclasses import dataclass
 import re
 
 from app.chunking import PolicyChunk
+from app.generation import ExtractiveAnswerGenerator, LlmProvider, OllamaAnswerGenerator
 from app.guardrails import apply_output_guardrails, refusal_message
 from app.schemas import Citation, GuardrailInfo
 from app.stores.base import RetrievalStore, SearchResult
@@ -39,15 +40,32 @@ class RagAnswer:
 
 
 class RagService:
-    def __init__(self, vector_store: RetrievalStore, retrieval_min_score: float) -> None:
+    def __init__(
+        self,
+        vector_store: RetrievalStore,
+        retrieval_min_score: float,
+        ollama_base_url: str,
+        ollama_default_model: str,
+        ollama_timeout_seconds: float,
+    ) -> None:
         self._vector_store = vector_store
         self._retrieval_min_score = retrieval_min_score
+        self._extractive_generator = ExtractiveAnswerGenerator()
+        self._ollama_base_url = ollama_base_url
+        self._ollama_default_model = ollama_default_model
+        self._ollama_timeout_seconds = ollama_timeout_seconds
 
     @property
     def chunks(self) -> list[PolicyChunk]:
         return self._vector_store.chunks
 
-    def answer(self, question: str, top_k: int, redacted_input: bool) -> RagAnswer:
+    def answer(
+        self,
+        question: str,
+        top_k: int,
+        redacted_input: bool,
+        llm_provider: LlmProvider | None = None,
+    ) -> RagAnswer:
         results = self._vector_store.search(question, top_k)
         relevant = [result for result in results if result.score >= self._retrieval_min_score]
 
@@ -64,7 +82,7 @@ class RagService:
                 retrieved_chunks=0,
             )
 
-        answer = _compose_answer(question, relevant)
+        answer = self._generate_answer(question, relevant, llm_provider)
         safe_answer, redacted_output = apply_output_guardrails(answer)
         citations = [
             Citation(
@@ -86,13 +104,27 @@ class RagService:
             retrieved_chunks=len(relevant),
         )
 
-
-def _compose_answer(question: str, results: list[SearchResult]) -> str:
-    best = results[0].chunk
-    sentences = _rank_sentences(question, [result.chunk for result in results])
-    selected = sentences[:3] if sentences else [_clean_markdown(best.text)]
-    answer_body = " ".join(selected).strip()
-    return f"{answer_body} Source: {best.document} ({best.section})."
+    def _generate_answer(
+        self,
+        question: str,
+        relevant: list[SearchResult],
+        llm_provider: LlmProvider | None,
+    ) -> str:
+        if llm_provider == "ollama":
+            generator = OllamaAnswerGenerator(
+                base_url=self._ollama_base_url,
+                model=self._ollama_default_model,
+                timeout_seconds=self._ollama_timeout_seconds,
+            )
+            try:
+                return generator.generate(question, relevant)
+            except Exception:
+                fallback = self._extractive_generator.generate(question, relevant)
+                return (
+                    f"{fallback} Note: Ollama generation was unavailable, so this "
+                    "response used the deterministic extractive generator."
+                )
+        return self._extractive_generator.generate(question, relevant)
 
 
 def _has_grounding_signal(question: str, results: list[SearchResult]) -> bool:
@@ -107,38 +139,6 @@ def _has_grounding_signal(question: str, results: list[SearchResult]) -> bool:
         chunk_terms.update(_content_terms(result.chunk.section))
 
     return bool(query_terms & chunk_terms)
-
-
-def _rank_sentences(question: str, chunks: list[PolicyChunk]) -> list[str]:
-    query_terms = {
-        term
-        for term in re.findall(r"[a-z0-9]+", question.lower())
-        if len(term) > 2
-    }
-    scored: list[tuple[float, str]] = []
-
-    for chunk_index, chunk in enumerate(chunks):
-        cleaned = _clean_markdown(chunk.text)
-        for sentence in re.split(r"(?<=[.!?])\s+", cleaned):
-            sentence = sentence.strip()
-            if len(sentence) < 20:
-                continue
-            sentence_terms = set(re.findall(r"[a-z0-9]+", sentence.lower()))
-            overlap = len(query_terms & sentence_terms)
-            if overlap:
-                density = overlap / max(len(sentence_terms), 1)
-                chunk_boost = max(0, len(chunks) - chunk_index) * 0.25
-                score = overlap + density + chunk_boost
-                scored.append((score, sentence))
-
-    ranked = sorted(scored, key=lambda item: (item[0], len(item[1])), reverse=True)
-    return [sentence for _, sentence in ranked]
-
-
-def _clean_markdown(text: str) -> str:
-    cleaned = re.sub(r"[*_`#>-]", "", text)
-    cleaned = re.sub(r"\s+", " ", cleaned)
-    return cleaned.strip()
 
 
 def _content_terms(text: str) -> set[str]:

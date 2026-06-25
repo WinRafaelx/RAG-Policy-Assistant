@@ -61,3 +61,15 @@ def test_ask_validates_empty_question() -> None:
     response = client.post("/ask", json={"question": "", "top_k": 3})
 
     assert response.status_code == 422
+
+
+def test_ask_rejects_unknown_llm_provider() -> None:
+    response = client.post(
+        "/ask",
+        json={
+            "question": "How many annual leave days do full-time employees receive?",
+            "llm_provider": "openai",
+        },
+    )
+
+    assert response.status_code == 422

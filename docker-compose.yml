@@ -24,6 +24,8 @@ services:
       TTB_POLICIES_DIR: policies
       TTB_BOOTSTRAP_ON_STARTUP: "true"
       TTB_LOCAL_MODE: "true"
+      TTB_OLLAMA_BASE_URL: http://host.docker.internal:11434
+      TTB_OLLAMA_DEFAULT_MODEL: qwen3.5:9b
     ports:
       - "8000:8000"
     depends_on:

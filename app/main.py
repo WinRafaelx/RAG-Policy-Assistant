@@ -3,6 +3,7 @@ import logging
 from uuid import uuid4
 
 from fastapi import FastAPI
+from fastapi.openapi.utils import get_openapi
 
 from app.chunking import load_policy_chunks
 from app.config import get_settings
@@ -36,9 +37,40 @@ else:
     chunks = load_policy_chunks(settings.policies_dir)
     retrieval_store = TfidfVectorStore(chunks)
 
-rag_service = RagService(retrieval_store, settings.retrieval_min_score)
+rag_service = RagService(
+    retrieval_store,
+    settings.retrieval_min_score,
+    settings.ollama_base_url,
+    settings.ollama_default_model,
+    settings.ollama_timeout_seconds,
+)
 
 app = FastAPI(title=settings.app_name, version="0.1.0")
+
+
+def custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+
+    openapi_schema = get_openapi(
+        title=settings.app_name,
+        version="0.1.0",
+        routes=app.routes,
+    )
+    ask_example = {
+        "question": "string",
+        "top_k": 3,
+        "llm_provider": None,
+    }
+    openapi_schema["components"]["schemas"]["AskRequest"]["example"] = ask_example
+    openapi_schema["paths"]["/ask"]["post"]["requestBody"]["content"]["application/json"][
+        "example"
+    ] = ask_example
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+
+app.openapi = custom_openapi
 
 
 @app.get("/health", response_model=HealthResponse)
@@ -94,6 +126,7 @@ def ask(request: AskRequest) -> AskResponse:
         question=input_guardrail.text,
         top_k=request.top_k,
         redacted_input=input_guardrail.redacted,
+        llm_provider=request.llm_provider,
     )
     telemetry = _telemetry(
         request_id=request_id,
