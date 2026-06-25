@@ -2,9 +2,9 @@ from collections.abc import Sequence
 from pathlib import Path
 import time
 
-from app.chunking import PolicyChunk, load_policy_chunks
-from app.embeddings import EmbeddingProvider
-from app.stores.base import SearchResult
+from app.domain.services.chunking import PolicyChunk, load_policy_chunks
+from app.infrastructure.ai_providers.embeddings import EmbeddingProvider
+from app.infrastructure.databases.vector.base import SearchResult
 
 
 SCHEMA_SQL = """
@@ -152,11 +152,11 @@ class PgVectorStore:
         ]
 
     def _ensure_schema(self) -> None:
-        with self._connect() as conn:
+        with self._connect(register_vectors=False) as conn:
             conn.execute(SCHEMA_SQL)
             conn.commit()
 
-    def _connect(self):
+    def _connect(self, register_vectors: bool = True):
         import psycopg
         from pgvector.psycopg import register_vector
         from psycopg.rows import dict_row
@@ -165,7 +165,8 @@ class PgVectorStore:
         for _ in range(self._connect_retries):
             try:
                 conn = psycopg.connect(self._database_url, row_factory=dict_row)
-                register_vector(conn)
+                if register_vectors:
+                    register_vector(conn)
                 return conn
             except Exception as error:
                 last_error = error

@@ -19,7 +19,7 @@ docker compose up --build
 
 ```bash
 pytest --cov=app --cov-report=term-missing --cov-fail-under=80
-python scripts/eval.py
+python scripts/run_evaluation.py
 ```
 
 ### Check Metrics
@@ -40,7 +40,7 @@ docker compose up --build
 1. Check the response `telemetry.request_id`.
 2. Find the matching structured log entry.
 3. Review `retrieval_scores` and `citation_chunk_ids`.
-4. Run `python scripts/eval.py`.
+4. Run `python scripts/run_evaluation.py`.
 5. If a corpus change caused the issue, inspect chunking and expected source coverage.
 
 ### Investigate Refusals

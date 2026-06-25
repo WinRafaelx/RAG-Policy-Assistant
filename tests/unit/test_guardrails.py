@@ -1,4 +1,4 @@
-from app.guardrails import apply_input_guardrails, apply_output_guardrails, redact_pii
+from app.domain.services.guardrails import apply_input_guardrails, apply_output_guardrails, redact_pii
 
 
 def test_redacts_common_pii_patterns() -> None:

@@ -8,7 +8,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     app_name: str = "ttb Policy Assistant"
     local_mode: bool = True
-    policies_dir: Path = Field(default=Path("policies"))
+    policies_dir: Path = Field(default=Path("data/policies"))
     retrieval_backend: str = "tfidf"
     retrieval_min_score: float = 0.08
     default_top_k: int = 3
@@ -18,8 +18,12 @@ class Settings(BaseSettings):
     embedding_model: str = "intfloat/multilingual-e5-base"
     embedding_dimension: int = 768
     ollama_base_url: str = "http://localhost:11434"
-    ollama_default_model: str = "qwen3.5:9b"
-    ollama_timeout_seconds: float = 60.0
+    ollama_default_model: str = "qwen3.5:4b"
+    ollama_timeout_seconds: float = 30.0
+    ollama_keep_alive: str = "5m"
+    ollama_num_predict: int = 80
+    ollama_num_ctx: int = 1024
+    ollama_context_top_k: int = 1
     api_key: str | None = None
     rate_limit_per_minute: int = 60
 

@@ -1,4 +1,4 @@
-from app.stores.pgvector_store import _read_count
+from app.infrastructure.databases.vector.pgvector import _read_count
 
 
 def test_read_count_supports_dict_rows() -> None:

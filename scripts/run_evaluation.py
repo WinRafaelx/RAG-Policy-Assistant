@@ -5,7 +5,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.guardrails import apply_input_guardrails
+from app.domain.services.guardrails import apply_input_guardrails
 from app.main import rag_service
 
 

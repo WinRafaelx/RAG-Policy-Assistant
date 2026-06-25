@@ -94,8 +94,19 @@ http://host.docker.internal:11434
 Make sure Ollama is running locally and the model exists before using `llm_provider`:
 
 ```bash
-ollama pull qwen3.5:9b
+ollama pull qwen3.5:4b
 ollama serve
+```
+
+The Docker Compose profile keeps the Ollama model warm for 5 minutes and sends only
+the top reranked policy chunk to the local model by default. These settings keep
+local LLM latency lower while preserving deterministic retrieval and citations:
+
+```text
+TTB_OLLAMA_KEEP_ALIVE=5m
+TTB_OLLAMA_NUM_PREDICT=80
+TTB_OLLAMA_NUM_CTX=1024
+TTB_OLLAMA_CONTEXT_TOP_K=1
 ```
 
 ## Local Fallback Mode
@@ -135,7 +146,7 @@ The tests cover:
 ## Evaluation Harness
 
 ```bash
-python scripts/eval.py
+python scripts/run_evaluation.py
 ```
 
 The harness runs 15 grounded questions and 7 adversarial questions, then prints answer, citation, expected-term, refusal, and retrieval-score summaries. It exits non-zero unless the configured thresholds pass, so it can be used as a CI regression gate. It also writes a machine-readable report to `data/eval/latest_results.json`, which is ignored by git. Current expected local result is 15/15 grounded answers, 15/15 citation hits, at least 12/15 expected-term hits, and 7/7 adversarial refusals.
@@ -190,7 +201,7 @@ Optional request fields:
 }
 ```
 
-If `llm_provider` is omitted, the service uses the deterministic extractive answer generator. Currently `ollama` is the only accepted LLM provider. The model is configured by `TTB_OLLAMA_DEFAULT_MODEL`.
+If `llm_provider` is omitted, the service uses the deterministic extractive answer generator. Currently `ollama` is the only accepted LLM provider. The model is configured by `TTB_OLLAMA_DEFAULT_MODEL`. Ollama generation uses a compact `/api/chat` prompt with bounded output by default; tune `TTB_OLLAMA_NUM_PREDICT`, `TTB_OLLAMA_NUM_CTX`, and `TTB_OLLAMA_CONTEXT_TOP_K` if you prefer longer answers over lower latency.
 
 If `TTB_API_KEY` is set, `POST /ask` requires the same value in the `X-API-Key` header. If `TTB_API_KEY` is unset, local development remains open. `TTB_RATE_LIMIT_PER_MINUTE` controls the lightweight in-memory IP-based request limiter for `/ask`; without authentication this is not a user identity or per-user quota. Production should use authenticated user/service identity plus an API gateway or shared store such as Redis for distributed rate limiting.
 
@@ -272,13 +283,13 @@ Local Ollama generation is supported without API keys. It is optional per reques
 
 | Requirement | Evidence |
 | --- | --- |
-| Ingest, chunk, embed, index | `app/chunking.py`, `app/embeddings.py`, `app/stores/pgvector_store.py`, `scripts/ingest.py`, `docker-compose.yml` |
+| Ingest, chunk, embed, index | `app/chunking.py`, `app/embeddings.py`, `app/stores/pgvector_store.py`, `scripts/ingest_policies.py`, `docker-compose.yml` |
 | Retrieval + grounded generation | `app/rag.py`, `app/generation.py`, structured citations and inline chunk IDs |
 | HTTP API and validation | `app/main.py`, `app/schemas.py`, `tests/test_ask_api.py` |
 | Guardrails | `app/guardrails.py`, `tests/test_guardrails.py`, adversarial eval set |
 | Observability | `app/logging_config.py`, `app/observability.py`, response telemetry, `GET /metrics` |
 | Tests and CI | `tests/`, `.github/workflows/ci.yml`, coverage gate, pgvector CI service, dependency audit |
-| Eval harness | `scripts/eval.py`, `data/eval/eval_questions.json`, `data/eval/adversarial_questions.json` |
+| Eval harness | `scripts/run_evaluation.py`, `data/eval/eval_questions.json`, `data/eval/adversarial_questions.json` |
 | Docker run path | `Dockerfile`, `docker-compose.yml` |
 | Docs and judgment | README, `docs/ADR-001-rag-architecture.md`, `docs/threat-model.md`, `docs/slo-runbook.md` |
 

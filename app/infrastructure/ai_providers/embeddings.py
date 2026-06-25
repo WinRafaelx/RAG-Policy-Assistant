@@ -13,10 +13,15 @@ class EmbeddingProvider(Protocol):
 
 class SentenceTransformerEmbeddingProvider:
     def __init__(self, model_name: str) -> None:
+        import torch
         from sentence_transformers import SentenceTransformer
 
         self._model_name = model_name
-        self._model = SentenceTransformer(model_name)
+        model = SentenceTransformer(model_name)
+        # Dynamic quantization to 8-bit integers for CPU memory and speed optimization
+        self._model = torch.quantization.quantize_dynamic(
+            model, {torch.nn.Linear}, dtype=torch.qint8
+        )
         self.dimension = self._model.get_sentence_embedding_dimension()
 
     def embed_texts(self, texts: list[str]) -> list[list[float]]:

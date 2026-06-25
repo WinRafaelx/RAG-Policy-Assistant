@@ -3,8 +3,8 @@ from uuid import uuid4
 
 import pytest
 
-from app.chunking import PolicyChunk
-from app.stores.pgvector_store import PgVectorStore
+from app.domain.services.chunking import PolicyChunk
+from app.infrastructure.databases.vector.pgvector import PgVectorStore
 
 
 class FakeEmbeddingProvider:

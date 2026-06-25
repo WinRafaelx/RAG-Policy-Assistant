@@ -21,11 +21,18 @@ services:
     environment:
       TTB_RETRIEVAL_BACKEND: pgvector
       TTB_DATABASE_URL: postgresql://ttb:${POSTGRES_PASSWORD:-ttb_local_dev_password}@db:5432/ttb_policy_assistant
-      TTB_POLICIES_DIR: policies
+      TTB_POLICIES_DIR: data/policies
       TTB_BOOTSTRAP_ON_STARTUP: "true"
       TTB_LOCAL_MODE: "true"
       TTB_OLLAMA_BASE_URL: http://host.docker.internal:11434
-      TTB_OLLAMA_DEFAULT_MODEL: qwen3.5:9b
+      TTB_OLLAMA_DEFAULT_MODEL: qwen3.5:4b
+      TTB_OLLAMA_KEEP_ALIVE: 5m
+      TTB_OLLAMA_NUM_PREDICT: "80"
+      TTB_OLLAMA_NUM_CTX: "1024"
+      TTB_OLLAMA_CONTEXT_TOP_K: "1"
+      HF_HOME: /models/huggingface
+    volumes:
+      - ~/.cache/huggingface:/models/huggingface
     ports:
       - "8000:8000"
     depends_on:

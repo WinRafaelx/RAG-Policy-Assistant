@@ -6,16 +6,16 @@ from uuid import uuid4
 from fastapi import FastAPI, Header, HTTPException, Request, Response
 from fastapi.openapi.utils import get_openapi
 
-from app.chunking import load_policy_chunks
-from app.config import get_settings
-from app.embeddings import SentenceTransformerEmbeddingProvider
-from app.guardrails import apply_input_guardrails, refusal_message
-from app.logging_config import configure_logging
-from app.observability import InMemoryRateLimiter, ServiceMetrics
-from app.rag import RagService
-from app.schemas import AskRequest, AskResponse, GuardrailInfo, HealthResponse, Telemetry
-from app.stores.pgvector_store import PgVectorStore
-from app.vector_store import TfidfVectorStore
+from app.domain.services.chunking import load_policy_chunks
+from app.core.config import get_settings
+from app.infrastructure.ai_providers.embeddings import SentenceTransformerEmbeddingProvider
+from app.domain.services.guardrails import apply_input_guardrails, refusal_message
+from app.core.logging_config import configure_logging
+from app.api.observability import InMemoryRateLimiter, ServiceMetrics
+from app.domain.services.rag import RagService
+from app.api.schemas import AskRequest, AskResponse, GuardrailInfo, HealthResponse, Telemetry
+from app.infrastructure.databases.vector.pgvector import PgVectorStore
+from app.infrastructure.databases.vector.tfidf import TfidfVectorStore
 
 
 configure_logging()
@@ -45,6 +45,10 @@ rag_service = RagService(
     settings.ollama_base_url,
     settings.ollama_default_model,
     settings.ollama_timeout_seconds,
+    settings.ollama_keep_alive,
+    settings.ollama_num_predict,
+    settings.ollama_num_ctx,
+    settings.ollama_context_top_k,
 )
 
 app = FastAPI(title=settings.app_name, version="0.1.0")

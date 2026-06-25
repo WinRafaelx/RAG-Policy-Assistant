@@ -5,16 +5,13 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
-ARG TTB_EMBEDDING_MODEL=intfloat/multilingual-e5-base
-ENV TTB_EMBEDDING_MODEL=${TTB_EMBEDDING_MODEL}
-ENV HF_HOME=/models/huggingface
-RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('${TTB_EMBEDDING_MODEL}')"
+COPY requirements.txt .
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --system -r requirements.txt --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple
 
 COPY app ./app
-COPY policies ./policies
 COPY data ./data
 COPY scripts ./scripts
 

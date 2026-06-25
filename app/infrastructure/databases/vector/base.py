@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Protocol
 
-from app.chunking import PolicyChunk
+from app.domain.services.chunking import PolicyChunk
 
 
 @dataclass(frozen=True)

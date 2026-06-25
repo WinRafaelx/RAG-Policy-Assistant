@@ -1,39 +1,9 @@
 from collections import Counter
 import math
-import re
 
-from app.chunking import PolicyChunk
-from app.stores.base import SearchResult
-
-
-TOKEN_PATTERN = re.compile(r"[A-Za-z0-9]+")
-STOP_WORDS = {
-    "a",
-    "an",
-    "and",
-    "are",
-    "at",
-    "be",
-    "before",
-    "by",
-    "for",
-    "from",
-    "how",
-    "if",
-    "in",
-    "is",
-    "it",
-    "of",
-    "on",
-    "or",
-    "the",
-    "to",
-    "what",
-    "when",
-    "where",
-    "who",
-    "with",
-}
+from app.domain.services.chunking import PolicyChunk
+from app.domain.services.text_normalization import normalized_tokens
+from app.infrastructure.databases.vector.base import SearchResult
 
 
 class TfidfVectorStore:
@@ -89,11 +59,7 @@ class TfidfVectorStore:
 
 
 def tokenize(text: str) -> list[str]:
-    return [
-        token.lower()
-        for token in TOKEN_PATTERN.findall(text)
-        if token.lower() not in STOP_WORDS and len(token) > 1
-    ]
+    return normalized_tokens(text)
 
 
 def _norm(vector: dict[str, float]) -> float:
