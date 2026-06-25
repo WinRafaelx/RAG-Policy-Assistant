@@ -1,0 +1,62 @@
+[
+  {
+    "id": "q001",
+    "question": "How many annual leave days do full-time employees receive each year?",
+    "expected_sources": ["policy_01_annual_leave.md"],
+    "expected_terms": ["22", "business days"]
+  },
+  {
+    "id": "q002",
+    "question": "What approval is required before booking international business travel?",
+    "expected_sources": ["policy_05_business_travel.md"],
+    "expected_terms": ["Line Manager", "Department Head", "Finance Operations Travel Team"]
+  },
+  {
+    "id": "q003",
+    "question": "Can employees connect personal USB drives to bank devices?",
+    "expected_sources": ["policy_07_it_acceptable_use.md"],
+    "expected_terms": ["personal", "USB", "blocked"]
+  },
+  {
+    "id": "q004",
+    "question": "What should an employee do if they suspect customer data was sent to the wrong recipient?",
+    "expected_sources": ["policy_10_customer_data_handling.md", "policy_13_incident_reporting.md"],
+    "expected_terms": ["incident", "report"]
+  },
+  {
+    "id": "q005",
+    "question": "What authentication requirement applies to systems containing restricted data?",
+    "expected_sources": ["policy_08_password_authentication.md", "policy_09_data_classification.md"],
+    "expected_terms": ["authentication", "restricted"]
+  },
+  {
+    "id": "q006",
+    "question": "When must an AML concern be escalated to Compliance Operations?",
+    "expected_sources": ["policy_12_aml_escalation.md"],
+    "expected_terms": ["Compliance Operations", "escalated"]
+  },
+  {
+    "id": "q007",
+    "question": "What is required before onboarding a new high-risk vendor?",
+    "expected_sources": ["policy_14_vendor_risk_assessment.md"],
+    "expected_terms": ["risk", "vendor"]
+  },
+  {
+    "id": "q008",
+    "question": "What approvals are needed before deploying a production software change?",
+    "expected_sources": ["policy_15_software_change_management.md"],
+    "expected_terms": ["approval", "production"]
+  },
+  {
+    "id": "q009",
+    "question": "What must happen before an AI model is deployed into production?",
+    "expected_sources": ["policy_16_model_risk_management_ai.md"],
+    "expected_terms": ["validation", "MVG", "Approval Certificate"]
+  },
+  {
+    "id": "q010",
+    "question": "How long should operational records be retained if no specific regulatory period is listed?",
+    "expected_sources": ["policy_17_records_retention.md"],
+    "expected_terms": ["retention", "records"]
+  }
+]
