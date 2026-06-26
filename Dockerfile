@@ -7,9 +7,15 @@ WORKDIR /app
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
-COPY requirements.txt .
+# Pre-install PyTorch CPU to cache this heavy dependency.
+# This prevents invalidating the massive download layer when requirements.txt changes.
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip install --system -r requirements.txt --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple
+    uv pip install --system torch --index-url https://download.pytorch.org/whl/cpu
+
+COPY requirements.txt .
+# Install the rest of the dependencies from PyPI. uv will skip torch since it is already installed.
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --system -r requirements.txt
 
 COPY app ./app
 COPY data ./data
