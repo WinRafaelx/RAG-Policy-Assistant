@@ -316,10 +316,19 @@ Local Ollama generation is supported without API keys. It is optional per reques
 
 ## Operational Notes
 
-- [Architecture ADR](docs/ADR-001-rag-architecture.md)
+- [RAG Architecture ADR (ADR-001)](docs/ADR-001-rag-architecture.md)
+- [Security Guardrails ADR (ADR-002)](docs/ADR-002-security-guardrail-layer.md)
 - [Threat model](docs/threat-model.md)
 - [SLO and runbook](docs/slo-runbook.md)
 
 ## AI-Assisted Development Disclosure
 
-AI assistance was used to help plan the implementation, draft synthetic evaluation questions, and scaffold code and documentation. All content is synthetic and reviewed for the take-home scope. No real secrets or confidential bank data were shared.
+I utilized an AI assistant as a pair-programmer and research partner throughout the lifecycle of this project. The collaboration spanned the following areas:
+
+* **Research & Tool Selection:** Used AI to compare and contrast vector backends (e.g., PostgreSQL + pgvector vs. FAISS) and security/guardrail tools (specifically researching Microsoft Presidio for PII redaction and Hugging Face classifier models for prompt injection vs. regex-only options).
+* **Planning & Architecture:** Assisted in structuring the implementation plan, designing the multi-stage guardrail pipeline boundaries, and drafting the synthetic policy corpus.
+* **Code Implementation:** Scaffolded the core implementation code, including the FastAPI routes, pgvector database logic, and the optimized guardrail engine (including Presidio initialization and Deberta prompt-injection classifier integration).
+* **Testing & Coverage:** Scaffolded the unit and integration test suites to ensure high test coverage (exceeding the 80% threshold), which was subsequently verified and refined through manual testing.
+
+All generated code, patterns, and architectural decisions were reviewed, debugged, and integrated by me. No bank-confidential data, real PII, or credentials were shared with any external AI models.
+

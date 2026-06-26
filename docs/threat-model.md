@@ -26,3 +26,10 @@
 - Customer account systems.
 - Production secret manager integration.
 - Fine-grained authorization and identity provider integration.
+
+## References
+
+- See [ADR-001: RAG Architecture](ADR-001-rag-architecture.md) for data flow and retrieval setup.
+- See [ADR-002: Security Guardrail Layer](ADR-002-security-guardrail-layer.md) for implementation specifications on input defenses and threat counters.
+- See [SLO and Runbook](slo-runbook.md) for operational targets and safety runbooks.
+

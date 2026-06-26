@@ -54,3 +54,10 @@ docker compose up --build
 1. Check `/metrics` request and refusal counts.
 2. Review structured logs by `request_id`, backend, and refusal reason.
 3. If local IP-based in-memory rate limiting is insufficient, move enforcement to authenticated identity plus an API gateway or shared store.
+
+## References
+
+- See [ADR-001: RAG Architecture](ADR-001-rag-architecture.md) for core pipeline and retrieval setup.
+- See [ADR-002: Security Guardrail Layer](ADR-002-security-guardrail-layer.md) for detail on safety filters and injection protections.
+- See [Threat Model](threat-model.md) for mapping security risks to pipeline controls.
+
