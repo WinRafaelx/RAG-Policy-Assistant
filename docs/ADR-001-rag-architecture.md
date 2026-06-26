@@ -51,7 +51,7 @@ flowchart TD
 ### Rationale
 
 * **Unified Datastore:** pgvector keeps chunk text, metadata, and embeddings together in a unified operational database.
-* **Multilingual Capability:** `intfloat/multilingual-e5-base` is highly retrieval-oriented, lightweight, and supports future Thai/English bilingual operations.
+* **Model Efficiency:** `intfloat/multilingual-e5-base` is highly retrieval-oriented, lightweight, and provides a strong baseline for semantic search.
 * **Deterministic Baseline:** Deterministic extraction ensures reproducible answers during evaluation tests without needing cloud OpenAI keys.
 * **Vendor Decoupling:** Optional Ollama queries remain available per request, demonstrating decoupling of the LLM generation provider.
 

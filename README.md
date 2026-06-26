@@ -6,8 +6,6 @@ Production-style take-home implementation of a small Retrieval-Augmented Generat
 
 The exam brief referenced a provided synthetic policy corpus and evaluation set, but those files were not included in the folder. I created an obviously synthetic corpus in `policies/` and a reproducible evaluation set in `data/eval/`. No real customer, employee, bank-confidential data, or secrets are used.
 
-The implementation is English-first and is currently **not compatible with the Thai language**. While the API and file handling are UTF-8 safe (so Thai input will not break request validation or JSON responses), the semantic retrieval, text chunking, embedding model, evaluation suites, and guardrails are tuned exclusively for English. A production Thai deployment would require Thai policy documents, Thai/English evals, multilingual retrieval evaluation, and Thai-specific PII review.
-
 ## Architecture
 
 ```mermaid
@@ -305,7 +303,6 @@ Local Ollama generation is supported without API keys. It is optional per reques
 - Kept TF-IDF retrieval as a fallback so local tests can run without Docker or model downloads.
 - Used deterministic answer synthesis instead of external LLM calls so the project can be evaluated without private keys.
 - Implemented a lightweight eval harness with citation and term checks instead of an LLM judge.
-- The system is currently not compatible with the Thai language (other than UTF-8 compatibility for API requests) because full bilingual retrieval was not required by the brief.
 - Used an in-memory IP-based rate limiter to demonstrate stabilization controls without making local review harder. A real deployment should enforce identity-aware access and distributed rate limiting.
 
 ## Rubric Coverage
@@ -326,7 +323,7 @@ Local Ollama generation is supported without API keys. It is optional per reques
 
 - Add Azure AI Search behind the same retrieval interface.
 - Add optional OpenAI/Azure OpenAI answer generation with strict context-only prompting.
-- Add Thai and bilingual corpora, Thai PII patterns, and multilingual embedding evaluation.
+- Add support for bilingual policy corpora and multilingual embedding models if required by future scope expansion.
 - Add linting and static type checks to CI.
 - Replace IP-based in-memory rate limiting with identity-aware Redis or API gateway limits for multi-instance deployments.
 - Add the bank's standard identity-aware service authentication.
