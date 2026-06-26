@@ -10,16 +10,35 @@ The implementation is English-first because the brief did not explicitly require
 
 ## Architecture
 
-```text
-Markdown policies
-  -> section-aware chunking
-  -> multilingual E5 embeddings
-  -> PostgreSQL + pgvector index
-  -> top-k vector retrieval
-  -> deterministic grounded answer synthesis
-  -> citations, guardrails, telemetry
-  -> FastAPI POST /ask
+```mermaid
+graph TD
+    User([User Request]) --> API[FastAPI POST /ask]
+    
+    subgraph Guardrails [Input Security Guardrails]
+        API --> Schema[Pydantic Schema Check]
+        Schema --> PII_In[Input PII Masking<br>Presidio + Custom Thai Recognizers]
+        PII_In --> Heuristics[Heuristic Injection Checks<br>Regex Rules]
+        Heuristics --> Injection[Semantic Classifier<br>Deberta Prompt Injection Model]
+        Injection --> Sensitive[Sensitive Scope Check<br>Customer Balance/Bypass Rules]
+    end
+
+    Sensitive -- Blocked / Malicious --> Refusal[Short-Circuit Refusal<br>Neutral Grounded Refusal]
+    Sensitive -- Clean / Approved --> Retrieval[Vector Retrieval & Reranking]
+
+    subgraph RAG [RAG Search & Generation]
+        Retrieval --> VectorSearch[Vector Cosine Similarity Search<br>pgvector / TF-IDF Store]
+        VectorSearch --> Rerank[Lexical Keyword Reranker<br>Cosine Similarity + Token Density]
+        Rerank --> Grounding[Grounding Verification<br>Query-Chunk Token Overlap Check]
+        Grounding -- No Signal --> OutOfScope[Out-of-Scope Refusal]
+        Grounding -- Grounded --> Gen[Answer Synthesis<br>Local Extractive / Ollama LLM]
+    end
+
+    Gen --> PII_Out[Output PII Masking<br>Presidio Redaction]
+    PII_Out --> Response([JSON Response<br>Answer + Citations + Telemetry])
+    Refusal --> Response
+    OutOfScope --> Response
 ```
+
 
 The primary Docker path uses PostgreSQL with pgvector, matching the exam requirement to chunk, embed, and index into a vector store. The answer synthesis is still deterministic and local, so no OpenAI or Azure key is required. A TF-IDF fallback remains available for fast local tests and offline debugging.
 

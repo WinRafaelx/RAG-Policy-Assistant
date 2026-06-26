@@ -31,27 +31,18 @@ We chose **Option 3**. The architecture enforces a sequential check pipeline tha
 
 ### Architectural Diagram
 
-```text
-User Request -> Pydantic Schema Validation (Rust Engine)
-                     |
-                     v
-             Stage A: PII Masking (Microsoft Presidio + Custom Recognizers)
-                     |
-                     v
-             Stage B: Heuristic Rules (Regex match on structural overrides)
-                     |
-                     v
-             Stage C: Semantic Classifier (Local Deberta Prompt Injection model)
-                     |
-                     v
-             Stage D: Policy Enforcement Rules (Sensitive customer/account patterns)
-                     |
-  [Any stage flags as unsafe?]
-     /                       \
-  (Yes)                      (No)
-   /                           \
-  v                             v
-Short-circuit Refusal        Forward to RAG Search & Generation
+```mermaid
+graph TD
+    Start([User Request]) --> Pydantic[1. Pydantic Schema Validation<br>Rust Engine checks bounds]
+    Pydantic --> StageA[2. Stage A: PII Masking<br>Presidio + Custom Thai Recognizers]
+    StageA --> StageB[3. Stage B: Heuristic Check<br>Regex rules for injection patterns]
+    StageB --> StageC[4. Stage C: Semantic Classifier<br>Local Deberta prompt injection scoring]
+    StageC --> StageD[5. Stage D: Policy Enforcement<br>Regex lookup for out-of-scope/bypass targets]
+    
+    StageD --> Decision{Any stage triggered<br>as unsafe?}
+    
+    Decision -- Yes --> Refusal[Short-Circuit Route<br>Return generic neutral refusal]
+    Decision -- No --> Approved[Forward Route<br>RAG Search & Synthesis]
 ```
 
 ### Chosen Execution Lifecycle

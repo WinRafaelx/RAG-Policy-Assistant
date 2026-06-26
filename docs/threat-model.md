@@ -1,5 +1,30 @@
 # Threat Model
 
+## Trust Boundary & Data Flow Diagram
+
+```mermaid
+graph LR
+    subgraph Untrusted_Zone [Untrusted Boundary]
+        User[Client / User]
+    end
+
+    subgraph Trust_Boundary [FastAPI Sandbox Boundary]
+        API[POST /ask Endpoint] --> Guardrails[Guardrails Pipeline<br>PII & Injection defense]
+        Guardrails --> RAG[RAG Retrieval Store]
+    end
+
+    subgraph Trusted_Storage [Secure Storage Zone]
+        RAG --> DB[(PostgreSQL + pgvector)]
+    end
+
+    subgraph External_Zone [Semi-Trusted Zone]
+        RAG --> LLM[Local Ollama LLM]
+    end
+
+    User -->|Raw Text| API
+    Guardrails -->|Redacted Text Only| RAG
+```
+
 ## Assets
 
 - Synthetic policy corpus and embeddings.
