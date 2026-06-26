@@ -26,6 +26,28 @@ The take-home requires a small policy assistant that can run on a clean machine,
 
 We chose **Option 3**. The FastAPI service loads pgvector by default when running under Docker Compose, but falls back to local TF-IDF vectorization and sentence-level extractive answer generation when running tests or in offline mode.
 
+### Data Ingestion & Vector Store Creation Pipeline
+
+```mermaid
+flowchart TD
+    Start([Raw Markdown Files in data/policies]) --> Read[1. Read File UTF-8 Contents]
+    Read --> Strip[2. Strip Synthetic Document Footers]
+    Strip --> Split[3. Section-Aware Splitting<br>Split by Markdown Headings H1, H2, H3]
+    Split --> Rechunk[4. Paragraph Aggregation<br>Merge paragraphs up to target ~1200 chars]
+    
+    Rechunk --> Enrich[5. Text Enrichment<br>Prepend Document Name & Section Title]
+    Enrich --> Chunks[(In-Memory PolicyChunks)]
+    
+    Chunks --> CheckDB{Is pgvector active?}
+    
+    CheckDB -- No TF-IDF fallback --> BuildTFIDF[6. Build Local Term Vocab & IDF Table]
+    BuildTFIDF --> LocalStore[(Local Memory Vector Store)]
+    
+    CheckDB -- Yes pgvector default --> Embed[6. Generate Embeddings<br>E5-Base CPU Quantized Model]
+    Embed --> DB[7. Write to PostgreSQL<br>executemany INSERT ON CONFLICT DO UPDATE]
+    DB --> Index[8. Build HNSW Vector Index<br>vector_cosine_ops operator]
+```
+
 ### Rationale
 
 * **Unified Datastore:** pgvector keeps chunk text, metadata, and embeddings together in a unified operational database.
