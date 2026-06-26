@@ -1,4 +1,8 @@
 from typing import Protocol
+import logging
+
+
+logger = logging.getLogger("ttb_policy_assistant")
 
 
 class EmbeddingProvider(Protocol):
@@ -18,10 +22,17 @@ class SentenceTransformerEmbeddingProvider:
 
         self._model_name = model_name
         model = SentenceTransformer(model_name)
-        # Dynamic quantization to 8-bit integers for CPU memory and speed optimization
-        self._model = torch.quantization.quantize_dynamic(
-            model, {torch.nn.Linear}, dtype=torch.qint8
-        )
+        try:
+            # Dynamic quantization improves CPU memory usage when the runtime supports it.
+            self._model = torch.quantization.quantize_dynamic(
+                model, {torch.nn.Linear}, dtype=torch.qint8
+            )
+        except Exception as error:
+            logger.warning(
+                "embedding.quantization_unavailable",
+                extra={"error": str(error), "model": model_name},
+            )
+            self._model = model
         self.dimension = self._model.get_sentence_embedding_dimension()
 
     def embed_texts(self, texts: list[str]) -> list[list[float]]:
