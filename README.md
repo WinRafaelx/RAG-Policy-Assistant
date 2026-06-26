@@ -144,7 +144,6 @@ The tests cover:
 - `/ask` integration behavior
 - request validation
 - optional pgvector upsert/search integration when `TTB_TEST_DATABASE_URL` is set
-- optional API key authentication
 - IP-based rate limiting
 - metrics output
 
@@ -208,7 +207,7 @@ Optional request fields:
 
 If `llm_provider` is omitted, the service uses the deterministic extractive answer generator. Currently `ollama` is the only accepted LLM provider. The model is configured by `TTB_OLLAMA_DEFAULT_MODEL`. Ollama generation uses a compact `/api/chat` prompt with bounded output by default; tune `TTB_OLLAMA_NUM_PREDICT`, `TTB_OLLAMA_NUM_CTX`, and `TTB_OLLAMA_CONTEXT_TOP_K` if you prefer longer answers over lower latency.
 
-If `TTB_API_KEY` is set, `POST /ask` requires the same value in the `X-API-Key` header. If `TTB_API_KEY` is unset, local development remains open. `TTB_RATE_LIMIT_PER_MINUTE` controls the lightweight in-memory IP-based request limiter for `/ask`; without authentication this is not a user identity or per-user quota. Production should use authenticated user/service identity plus an API gateway or shared store such as Redis for distributed rate limiting.
+`TTB_RATE_LIMIT_PER_MINUTE` controls the lightweight in-memory IP-based request limiter for `/ask`; this is not a user identity or per-user quota. Production should use authenticated user/service identity plus an API gateway or shared store such as Redis for distributed rate limiting.
 
 ## Guardrails
 
@@ -224,7 +223,6 @@ Implemented guardrails:
 - Refuses requests to bypass approval or policy controls.
 - Refuses when retrieval confidence is below the configured threshold.
 - Fails closed with `guardrail_unavailable` if a required guardrail component cannot safely evaluate a request.
-- Supports optional API key protection for `/ask`.
 - Applies a configurable in-memory IP-based rate limit to `/ask`.
 - Logs redacted request metadata rather than raw sensitive values.
 - Returns `X-Request-ID` and includes request IDs in structured logs for correlation.
@@ -250,7 +248,7 @@ No AI API keys are required. No secrets are committed.
 
 Docker Compose uses a local development database password default through environment interpolation. In a real deployment this would come from a secret manager or deployment environment, not source-controlled compose defaults.
 
-`TTB_API_KEY` is optional and must be supplied through the environment if API-key protection is enabled. No real API keys, model provider keys, or production database passwords are committed.
+No real API keys, model provider keys, or production database passwords are committed.
 
 Optional provider variables are documented in `.env.example` for future use only:
 
@@ -289,7 +287,7 @@ Local Ollama generation is supported without API keys. It is optional per reques
 - Used deterministic answer synthesis instead of external LLM calls so the project can be evaluated without private keys.
 - Implemented a lightweight eval harness with citation and term checks instead of an LLM judge.
 - Kept Thai support to UTF-8 compatibility only because full bilingual retrieval was not required by the brief.
-- Used optional API-key auth and an in-memory IP-based rate limiter to demonstrate stabilization controls without making local review harder. A real deployment should enforce identity-aware access and distributed rate limiting.
+- Used an in-memory IP-based rate limiter to demonstrate stabilization controls without making local review harder. A real deployment should enforce identity-aware access and distributed rate limiting.
 
 ## Rubric Coverage
 
@@ -312,7 +310,7 @@ Local Ollama generation is supported without API keys. It is optional per reques
 - Add Thai and bilingual corpora, Thai PII patterns, and multilingual embedding evaluation.
 - Add linting and static type checks to CI.
 - Replace IP-based in-memory rate limiting with identity-aware Redis or API gateway limits for multi-instance deployments.
-- Replace simple API-key protection with the bank's standard identity-aware service authentication.
+- Add the bank's standard identity-aware service authentication.
 
 ## Operational Notes
 
@@ -331,4 +329,3 @@ I utilized an AI assistant as a pair-programmer and research partner throughout 
 * **Testing & Coverage:** Scaffolded the unit and integration test suites to ensure high test coverage (exceeding the 80% threshold), which was subsequently verified and refined through manual testing.
 
 All generated code, patterns, and architectural decisions were reviewed, debugged, and integrated by me. No bank-confidential data, real PII, or credentials were shared with any external AI models.
-

@@ -1,10 +1,9 @@
 from contextlib import asynccontextmanager
 from time import perf_counter
 import logging
-import secrets
 from uuid import uuid4
 
-from fastapi import FastAPI, Header, HTTPException, Request, Response
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.openapi.utils import get_openapi
 
 from app.domain.services.chunking import load_policy_chunks
@@ -139,12 +138,10 @@ def ask(
     request: AskRequest,
     response: Response,
     http_request: Request,
-    x_api_key: str | None = Header(default=None),
 ) -> AskResponse:
     started = perf_counter()
     request_id = str(uuid4())
     response.headers["X-Request-ID"] = request_id
-    _authorize_request(x_api_key)
     _check_rate_limit(http_request)
     input_guardrail = guardrail_service.apply_input(request.question)
 
@@ -236,13 +233,6 @@ def service_metrics() -> Response:
         content=metrics.render_prometheus(settings.retrieval_backend),
         media_type="text/plain; version=0.0.4",
     )
-
-
-def _authorize_request(x_api_key: str | None) -> None:
-    if not settings.api_key:
-        return
-    if not x_api_key or not secrets.compare_digest(x_api_key, settings.api_key):
-        raise HTTPException(status_code=401, detail="Missing or invalid API key")
 
 
 def _check_rate_limit(request: Request) -> None:

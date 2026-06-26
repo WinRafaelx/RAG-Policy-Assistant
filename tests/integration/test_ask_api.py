@@ -101,33 +101,7 @@ def test_ask_rejects_unknown_llm_provider() -> None:
     assert response.status_code == 422
 
 
-def test_ask_requires_api_key_when_configured(monkeypatch) -> None:
-    monkeypatch.setattr(main_module.settings, "api_key", "test-secret")
-
-    response = client.post(
-        "/ask",
-        json={"question": "How many annual leave days do full-time employees receive?"},
-    )
-
-    assert response.status_code == 401
-    assert response.json()["detail"] == "Missing or invalid API key"
-
-
-def test_ask_accepts_valid_api_key_when_configured(monkeypatch) -> None:
-    monkeypatch.setattr(main_module.settings, "api_key", "test-secret")
-
-    response = client.post(
-        "/ask",
-        headers={"X-API-Key": "test-secret"},
-        json={"question": "How many annual leave days do full-time employees receive?"},
-    )
-
-    assert response.status_code == 200
-    assert response.json()["success"] is True
-
-
 def test_ask_enforces_rate_limit(monkeypatch) -> None:
-    monkeypatch.setattr(main_module.settings, "api_key", None)
     monkeypatch.setattr(main_module.settings, "rate_limit_per_minute", 1)
     main_module.rate_limiter.reset()
 
@@ -146,7 +120,6 @@ def test_ask_enforces_rate_limit(monkeypatch) -> None:
 
 
 def test_metrics_endpoint_exposes_request_counters(monkeypatch) -> None:
-    monkeypatch.setattr(main_module.settings, "api_key", None)
     monkeypatch.setattr(main_module.settings, "rate_limit_per_minute", 0)
     main_module.metrics.reset()
 

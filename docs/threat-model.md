@@ -18,7 +18,7 @@
 | Poisoned or misleading policy chunks | Synthetic corpus only for take-home; production needs source review, document signing, ingestion audit logs, and rollback |
 | Dependency or model supply-chain issue | Pin dependencies, run CI, and run dependency audit in CI |
 | Expensive abuse of `/ask` | Configurable in-memory IP-based rate limiting for take-home; production should use authenticated identity plus API gateway or Redis-backed limits |
-| Unauthenticated internal use | Optional `TTB_API_KEY` protection for `/ask`; production should use standard identity-aware service authentication |
+| Unauthenticated internal use | `/ask` is intentionally open for local review; production should use standard identity-aware service authentication |
 
 ## Out Of Scope For This Take-Home
 
@@ -32,4 +32,3 @@
 - See [ADR-001: RAG Architecture](ADR-001-rag-architecture.md) for data flow and retrieval setup.
 - See [ADR-002: Security Guardrail Layer](ADR-002-security-guardrail-layer.md) for implementation specifications on input defenses and threat counters.
 - See [SLO and Runbook](slo-runbook.md) for operational targets and safety runbooks.
-

@@ -24,7 +24,6 @@ class Settings(BaseSettings):
     ollama_num_predict: int = 80
     ollama_num_ctx: int = 1024
     ollama_context_top_k: int = 1
-    api_key: str | None = None
     rate_limit_per_minute: int = 60
     prompt_injection_model: str = "ProtectAI/deberta-v3-base-prompt-injection"
     prompt_injection_threshold: float = 0.75
