@@ -91,3 +91,9 @@ def _split_to_target_size(text: str, target_chars: int) -> list[str]:
         chunks.append("\n\n".join(current))
 
     return chunks
+
+
+def enrich_chunk_text(chunk: PolicyChunk) -> str:
+    doc_name = chunk.document.replace("policy_", "").replace(".md", "").replace("_", " ").strip().title()
+    return f"Document: {doc_name}\nSection: {chunk.section}\nContent: {chunk.text}"
+

@@ -18,10 +18,22 @@ class AnswerGenerator(Protocol):
 
 class ExtractiveAnswerGenerator:
     def generate(self, question: str, results: list[SearchResult]) -> str:
-        best = results[0].chunk
-        sentences = _rank_sentences(question, [result.chunk for result in results])
-        selected = sentences[:3] if sentences else [_clean_markdown(best.text)]
-        answer_body = " ".join(selected).strip()
+        sentences_with_chunks = _rank_sentences(question, [result.chunk for result in results])
+        if sentences_with_chunks:
+            selected = sentences_with_chunks[:3]
+            best = selected[0][1]
+        else:
+            best = results[0].chunk
+            selected = [(_clean_markdown(best.text), best)]
+
+        parts = []
+        for sentence, chunk in selected:
+            citation = f"[{chunk.chunk_id}]"
+            s_clean = sentence.rstrip(".!?")
+            punc = sentence[-1] if sentence and sentence[-1] in ".!?" else "."
+            parts.append(f"{s_clean} {citation}{punc}")
+
+        answer_body = " ".join(parts).strip()
         return f"{answer_body} Source: {best.document} ({best.section})."
  
 
@@ -59,7 +71,9 @@ class OllamaAnswerGenerator:
                         "content": (
                             "Answer only from the provided policy context. Keep the "
                             "answer to one short sentence. Do not include reasoning. "
-                            "Final answer only."
+                            "Final answer only. If the context does not contain the answer "
+                            "to the question, you must respond with: "
+                            "\"I could not find enough grounded policy context to answer that question.\""
                         ),
                     },
                     {
@@ -67,7 +81,8 @@ class OllamaAnswerGenerator:
                         "content": (
                             f"Policy context:\n{context}\n\n"
                             f"Question: {question}\n"
-                            "Answer using only the policy context. /no_think"
+                            "Answer using only the policy context. If the answer cannot be found in the context, "
+                            "respond with: \"I could not find enough grounded policy context to answer that question.\" /no_think"
                         ),
                     },
                 ],
@@ -108,9 +123,9 @@ def _format_context(results: list[SearchResult]) -> str:
     return "\n\n---\n\n".join(parts)
 
 
-def _rank_sentences(question: str, chunks: list[PolicyChunk]) -> list[str]:
+def _rank_sentences(question: str, chunks: list[PolicyChunk]) -> list[tuple[str, PolicyChunk]]:
     query_terms = content_terms(question)
-    scored: list[tuple[float, str]] = []
+    scored: list[tuple[float, str, PolicyChunk]] = []
 
     for chunk_index, chunk in enumerate(chunks):
         cleaned = _clean_markdown(chunk.text)
@@ -124,10 +139,10 @@ def _rank_sentences(question: str, chunks: list[PolicyChunk]) -> list[str]:
                 density = overlap / max(len(sentence_terms), 1)
                 chunk_boost = max(0, len(chunks) - chunk_index) * 0.25
                 score = overlap + density + chunk_boost
-                scored.append((score, sentence))
+                scored.append((score, sentence, chunk))
 
     ranked = sorted(scored, key=lambda item: (item[0], len(item[1])), reverse=True)
-    return [sentence for _, sentence in ranked]
+    return [(sentence, chunk) for _, sentence, chunk in ranked]
 
 
 def _clean_markdown(text: str) -> str:

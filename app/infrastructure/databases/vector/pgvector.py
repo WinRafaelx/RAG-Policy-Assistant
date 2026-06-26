@@ -2,13 +2,14 @@ from collections.abc import Sequence
 from pathlib import Path
 import time
 
-from app.domain.services.chunking import PolicyChunk, load_policy_chunks
+from app.domain.services.chunking import PolicyChunk, load_policy_chunks, enrich_chunk_text
 from app.infrastructure.ai_providers.embeddings import EmbeddingProvider
 from app.infrastructure.databases.vector.base import SearchResult
 
 
 SCHEMA_SQL = """
 CREATE EXTENSION IF NOT EXISTS vector;
+
 
 CREATE TABLE IF NOT EXISTS policy_chunks (
     id BIGSERIAL PRIMARY KEY,
@@ -86,7 +87,7 @@ class PgVectorStore:
         if not chunks:
             return 0
 
-        texts = [chunk.text for chunk in chunks]
+        texts = [enrich_chunk_text(chunk) for chunk in chunks]
         embeddings = self._embedding_provider.embed_texts(texts)
         if any(len(embedding) != self._embedding_provider.dimension for embedding in embeddings):
             raise ValueError("Embedding dimension mismatch")

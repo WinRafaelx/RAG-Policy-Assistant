@@ -1,7 +1,7 @@
 from collections import Counter
 import math
 
-from app.domain.services.chunking import PolicyChunk
+from app.domain.services.chunking import PolicyChunk, enrich_chunk_text
 from app.domain.services.text_normalization import normalized_tokens
 from app.infrastructure.databases.vector.base import SearchResult
 
@@ -13,7 +13,7 @@ class TfidfVectorStore:
         self._doc_norms: list[float] = []
         self._idf = self._build_idf(chunks)
         for chunk in chunks:
-            vector = self._vectorize(chunk.text)
+            vector = self._vectorize(enrich_chunk_text(chunk))
             self._doc_vectors.append(vector)
             self._doc_norms.append(_norm(vector))
 
@@ -38,7 +38,7 @@ class TfidfVectorStore:
     def _build_idf(self, chunks: list[PolicyChunk]) -> dict[str, float]:
         document_frequency: Counter[str] = Counter()
         for chunk in chunks:
-            document_frequency.update(set(tokenize(chunk.text)))
+            document_frequency.update(set(tokenize(enrich_chunk_text(chunk))))
 
         total = max(len(chunks), 1)
         return {
