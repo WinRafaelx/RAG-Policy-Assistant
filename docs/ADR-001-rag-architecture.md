@@ -1,7 +1,7 @@
 # ADR-001: RAG Architecture
 
 * **Status:** Implemented
-* **Date:** 2026-06-26
+* **Date:** 2026-06-25
 * **Authors:** Mawin Srichat
 
 ---
