@@ -34,7 +34,7 @@ We chose **Option 3**. The architecture enforces a sequential check pipeline tha
 ```mermaid
 graph TD
     Start([User Request]) --> Pydantic[1. Pydantic Schema Validation<br>Rust Engine checks bounds]
-    Pydantic --> StageA[2. Stage A: PII Masking<br>Presidio + Custom Thai Recognizers]
+    Pydantic --> StageA[2. Stage A: PII Masking<br>Presidio + Custom Recognizers]
     StageA --> StageB[3. Stage B: Heuristic Check<br>Regex rules for injection patterns]
     StageB --> StageC[4. Stage C: Semantic Classifier<br>Local Deberta prompt injection scoring]
     StageC --> StageD[5. Stage D: Policy Enforcement<br>Regex lookup for out-of-scope/bypass targets]

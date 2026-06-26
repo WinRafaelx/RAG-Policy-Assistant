@@ -6,7 +6,7 @@ Production-style take-home implementation of a small Retrieval-Augmented Generat
 
 The exam brief referenced a provided synthetic policy corpus and evaluation set, but those files were not included in the folder. I created an obviously synthetic corpus in `policies/` and a reproducible evaluation set in `data/eval/`. No real customer, employee, bank-confidential data, or secrets are used.
 
-The implementation is English-first because the brief did not explicitly require Thai-language support. The API and file handling are UTF-8 safe, so Thai input will not break request validation or JSON responses. A production Thai deployment would need Thai policy documents, Thai/English evals, multilingual retrieval evaluation, and Thai-specific PII review.
+The implementation is English-first and is currently **not compatible with the Thai language**. While the API and file handling are UTF-8 safe (so Thai input will not break request validation or JSON responses), the semantic retrieval, text chunking, embedding model, evaluation suites, and guardrails are tuned exclusively for English. A production Thai deployment would require Thai policy documents, Thai/English evals, multilingual retrieval evaluation, and Thai-specific PII review.
 
 ## Architecture
 
@@ -16,7 +16,7 @@ graph TD
     
     subgraph Guardrails [Input Security Guardrails]
         API --> Schema[Pydantic Schema Check]
-        Schema --> PII_In[Input PII Masking<br>Presidio + Custom Thai Recognizers]
+        Schema --> PII_In[Input PII Masking<br>Presidio + Custom Recognizers]
         PII_In --> Heuristics[Heuristic Injection Checks<br>Regex Rules]
         Heuristics --> Injection[Semantic Classifier<br>Deberta Prompt Injection Model]
         Injection --> Sensitive[Sensitive Scope Check<br>Customer Balance/Bypass Rules]
@@ -234,7 +234,7 @@ Implemented guardrails:
 
 - Validates `/ask` payloads with Pydantic, including question length, non-blank content, `top_k`, and supported `llm_provider` values.
 - Redacts PII with Presidio before retrieval and after answer generation.
-- Adds custom Presidio recognizers for Thai-style phone numbers, Thai national IDs, card-like numbers, and bank/customer/account/staff identifiers.
+- Adds custom Presidio recognizers for phone numbers, national IDs, card-like numbers, and bank/customer/account/staff identifiers.
 - Uses a local prompt-injection classifier configured by `TTB_PROMPT_INJECTION_MODEL` and `TTB_PROMPT_INJECTION_THRESHOLD`; Docker defaults to the public `ProtectAI/deberta-v3-base-prompt-injection` model.
 - Warms the prompt-injection classifier during FastAPI startup, so the first real `/ask` request does not pay model load time. `/health` includes `guardrails_ready`.
 - Refuses prompt-injection requests such as revealing hidden/system prompts.
@@ -305,7 +305,7 @@ Local Ollama generation is supported without API keys. It is optional per reques
 - Kept TF-IDF retrieval as a fallback so local tests can run without Docker or model downloads.
 - Used deterministic answer synthesis instead of external LLM calls so the project can be evaluated without private keys.
 - Implemented a lightweight eval harness with citation and term checks instead of an LLM judge.
-- Kept Thai support to UTF-8 compatibility only because full bilingual retrieval was not required by the brief.
+- The system is currently not compatible with the Thai language (other than UTF-8 compatibility for API requests) because full bilingual retrieval was not required by the brief.
 - Used an in-memory IP-based rate limiter to demonstrate stabilization controls without making local review harder. A real deployment should enforce identity-aware access and distributed rate limiting.
 
 ## Rubric Coverage
