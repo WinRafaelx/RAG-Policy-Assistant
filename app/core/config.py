@@ -26,6 +26,11 @@ class Settings(BaseSettings):
     ollama_context_top_k: int = 1
     api_key: str | None = None
     rate_limit_per_minute: int = 60
+    prompt_injection_model: str = "ProtectAI/deberta-v3-base-prompt-injection"
+    prompt_injection_threshold: float = 0.75
+    prompt_injection_malicious_label_pattern: str = (
+        "injection|jailbreak|malicious|attack|unsafe|label_1"
+    )
 
     model_config = SettingsConfigDict(env_file=".env", env_prefix="TTB_")
 

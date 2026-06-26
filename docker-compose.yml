@@ -18,6 +18,7 @@ services:
 
   api:
     build: .
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     environment:
       TTB_RETRIEVAL_BACKEND: pgvector
       TTB_DATABASE_URL: postgresql://ttb:${POSTGRES_PASSWORD:-ttb_local_dev_password}@db:5432/ttb_policy_assistant
@@ -30,8 +31,13 @@ services:
       TTB_OLLAMA_NUM_PREDICT: "80"
       TTB_OLLAMA_NUM_CTX: "1024"
       TTB_OLLAMA_CONTEXT_TOP_K: "1"
+      TTB_PROMPT_INJECTION_MODEL: ProtectAI/deberta-v3-base-prompt-injection
+      TTB_PROMPT_INJECTION_THRESHOLD: "0.75"
       HF_HOME: /models/huggingface
     volumes:
+      - ./app:/app/app
+      - ./data:/app/data
+      - ./scripts:/app/scripts
       - ~/.cache/huggingface:/models/huggingface
     ports:
       - "8000:8000"

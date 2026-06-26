@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from time import perf_counter
 import logging
 import secrets
@@ -9,11 +10,18 @@ from fastapi.openapi.utils import get_openapi
 from app.domain.services.chunking import load_policy_chunks
 from app.core.config import get_settings
 from app.infrastructure.ai_providers.embeddings import SentenceTransformerEmbeddingProvider
-from app.domain.services.guardrails import apply_input_guardrails, refusal_message
+from app.domain.services.guardrails import GuardrailTimings, build_guardrail_service, refusal_message
 from app.core.logging_config import configure_logging
 from app.api.observability import InMemoryRateLimiter, ServiceMetrics
 from app.domain.services.rag import RagService
-from app.api.schemas import AskRequest, AskResponse, GuardrailInfo, HealthResponse, Telemetry
+from app.api.schemas import (
+    AskRequest,
+    AskResponse,
+    GuardrailInfo,
+    GuardrailTelemetry,
+    HealthResponse,
+    Telemetry,
+)
 from app.infrastructure.databases.vector.pgvector import PgVectorStore
 from app.infrastructure.databases.vector.tfidf import TfidfVectorStore
 
@@ -50,10 +58,15 @@ rag_service = RagService(
     settings.ollama_num_ctx,
     settings.ollama_context_top_k,
 )
+guardrail_service = build_guardrail_service(
+    settings.prompt_injection_model,
+    settings.prompt_injection_threshold,
+    settings.prompt_injection_malicious_label_pattern,
+)
 
-app = FastAPI(title=settings.app_name, version="0.1.0")
 metrics = ServiceMetrics()
 rate_limiter = InMemoryRateLimiter()
+guardrails_ready = False
 
 
 def custom_openapi():
@@ -78,6 +91,32 @@ def custom_openapi():
     return app.openapi_schema
 
 
+def warm_up_guardrails() -> None:
+    global guardrails_ready
+    started = perf_counter()
+    timings = guardrail_service.warm_up()
+    guardrails_ready = True
+    logger.info(
+        "guardrails.warmed",
+        extra={
+            "latency_ms": max(int((perf_counter() - started) * 1000), 0),
+            "guardrail_timings": {
+                "input_pii_redaction_ms": timings.input_pii_redaction_ms,
+                "injection_detection_ms": timings.injection_detection_ms,
+                "deterministic_rules_ms": timings.deterministic_rules_ms,
+                "output_pii_redaction_ms": timings.output_pii_redaction_ms,
+            },
+        },
+    )
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    warm_up_guardrails()
+    yield
+
+
+app = FastAPI(title=settings.app_name, version="0.1.0", lifespan=lifespan)
 app.openapi = custom_openapi
 
 
@@ -91,6 +130,7 @@ def health() -> HealthResponse:
         documents_loaded=len(documents),
         chunks_loaded=len(chunks),
         local_mode=settings.local_mode,
+        guardrails_ready=guardrails_ready,
     )
 
 
@@ -106,7 +146,7 @@ def ask(
     response.headers["X-Request-ID"] = request_id
     _authorize_request(x_api_key)
     _check_rate_limit(http_request)
-    input_guardrail = apply_input_guardrails(request.question)
+    input_guardrail = guardrail_service.apply_input(request.question)
 
     if input_guardrail.refused:
         answer = refusal_message(input_guardrail.reason)
@@ -116,6 +156,7 @@ def ask(
             question=input_guardrail.text,
             answer=answer,
             retrieved_chunks=0,
+            guardrail_timings=input_guardrail.timings,
         )
         logger.info(
             "ask.refused",
@@ -125,6 +166,7 @@ def ask(
                 "latency_ms": telemetry.latency_ms,
                 "retrieval_backend": settings.retrieval_backend,
                 "top_k": request.top_k,
+                "guardrail_timings": telemetry.guardrails.model_dump(),
             },
         )
         metrics.record_request(telemetry.latency_ms, input_guardrail.reason)
@@ -145,6 +187,7 @@ def ask(
         question=input_guardrail.text,
         top_k=request.top_k,
         redacted_input=input_guardrail.redacted,
+        output_redactor=guardrail_service.apply_output,
         llm_provider=request.llm_provider,
     )
     telemetry = _telemetry(
@@ -153,6 +196,10 @@ def ask(
         question=input_guardrail.text,
         answer=rag_answer.answer,
         retrieved_chunks=rag_answer.retrieved_chunks,
+        guardrail_timings=_combine_guardrail_timings(
+            input_guardrail.timings,
+            rag_answer.output_guardrail_timings,
+        ),
     )
     logger.info(
         "ask.completed",
@@ -169,6 +216,8 @@ def ask(
             "retrieval_scores": rag_answer.retrieval_scores,
             "guardrail_reason": rag_answer.guardrails.reason,
             "refused": rag_answer.guardrails.refused,
+            "injection_score": input_guardrail.injection_score,
+            "guardrail_timings": telemetry.guardrails.model_dump(),
         },
     )
     metrics.record_request(telemetry.latency_ms, rag_answer.guardrails.reason)
@@ -208,6 +257,7 @@ def _telemetry(
     question: str,
     answer: str,
     retrieved_chunks: int,
+    guardrail_timings: GuardrailTimings,
 ) -> Telemetry:
     return Telemetry(
         request_id=request_id,
@@ -215,8 +265,26 @@ def _telemetry(
         input_tokens=_estimate_tokens(question),
         output_tokens=_estimate_tokens(answer),
         retrieved_chunks=retrieved_chunks,
+        guardrails=GuardrailTelemetry(
+            input_pii_redaction_ms=guardrail_timings.input_pii_redaction_ms,
+            injection_detection_ms=guardrail_timings.injection_detection_ms,
+            deterministic_rules_ms=guardrail_timings.deterministic_rules_ms,
+            output_pii_redaction_ms=guardrail_timings.output_pii_redaction_ms,
+        ),
     )
 
 
 def _estimate_tokens(text: str) -> int:
     return max(1, len(text.split()))
+
+
+def _combine_guardrail_timings(
+    input_timings: GuardrailTimings,
+    output_timings: GuardrailTimings,
+) -> GuardrailTimings:
+    return GuardrailTimings(
+        input_pii_redaction_ms=input_timings.input_pii_redaction_ms,
+        injection_detection_ms=input_timings.injection_detection_ms,
+        deterministic_rules_ms=input_timings.deterministic_rules_ms,
+        output_pii_redaction_ms=output_timings.output_pii_redaction_ms,
+    )

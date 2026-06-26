@@ -35,6 +35,11 @@ Token overlap is intentionally not used by default. For this corpus, section-awa
 docker compose up --build
 ```
 
+The Compose API service bind-mounts `app/`, `data/`, and `scripts/` and runs
+Uvicorn with `--reload`, so Python code and local data edits are picked up
+without rebuilding. Rebuild only when `requirements.txt`, `Dockerfile`, or
+Compose dependency settings change.
+
 Open:
 
 ```text
@@ -209,11 +214,16 @@ If `TTB_API_KEY` is set, `POST /ask` requires the same value in the `X-API-Key` 
 
 Implemented guardrails:
 
-- Redacts common emails, Thai-style phone numbers, and long account-like numbers.
+- Validates `/ask` payloads with Pydantic, including question length, non-blank content, `top_k`, and supported `llm_provider` values.
+- Redacts PII with Presidio before retrieval and after answer generation.
+- Adds custom Presidio recognizers for Thai-style phone numbers, Thai national IDs, card-like numbers, and bank/customer/account/staff identifiers.
+- Uses a local prompt-injection classifier configured by `TTB_PROMPT_INJECTION_MODEL` and `TTB_PROMPT_INJECTION_THRESHOLD`; Docker defaults to the public `ProtectAI/deberta-v3-base-prompt-injection` model.
+- Warms the prompt-injection classifier during FastAPI startup, so the first real `/ask` request does not pay model load time. `/health` includes `guardrails_ready`.
 - Refuses prompt-injection requests such as revealing hidden/system prompts.
 - Refuses customer-specific account or balance questions.
 - Refuses requests to bypass approval or policy controls.
 - Refuses when retrieval confidence is below the configured threshold.
+- Fails closed with `guardrail_unavailable` if a required guardrail component cannot safely evaluate a request.
 - Supports optional API key protection for `/ask`.
 - Applies a configurable in-memory IP-based rate limit to `/ask`.
 - Logs redacted request metadata rather than raw sensitive values.
@@ -229,6 +239,8 @@ The service writes structured JSON logs for refusals and completed requests, inc
 - retrieved chunk count
 - refusal status and reason
 - retrieval scores and cited chunk IDs
+- guardrail stage timings for input PII redaction, prompt-injection detection,
+  deterministic rule checks, and output PII redaction
 
 The service also exposes `GET /metrics` in Prometheus text format with request count, refusal counts by reason, average latency, and the active retrieval backend.
 

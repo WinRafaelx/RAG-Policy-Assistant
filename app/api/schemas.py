@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class AskRequest(BaseModel):
@@ -17,6 +17,14 @@ class AskRequest(BaseModel):
             "redaction still run outside the LLM."
         ),
     )
+
+    @field_validator("question")
+    @classmethod
+    def question_must_not_be_blank(cls, value: str) -> str:
+        stripped = value.strip()
+        if len(stripped) < 3:
+            raise ValueError("Question must contain at least 3 non-whitespace characters")
+        return stripped
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -42,12 +50,20 @@ class GuardrailInfo(BaseModel):
     reason: str | None = None
 
 
+class GuardrailTelemetry(BaseModel):
+    input_pii_redaction_ms: int = 0
+    injection_detection_ms: int = 0
+    deterministic_rules_ms: int = 0
+    output_pii_redaction_ms: int = 0
+
+
 class Telemetry(BaseModel):
     request_id: str
     latency_ms: int
     input_tokens: int
     output_tokens: int
     retrieved_chunks: int
+    guardrails: GuardrailTelemetry = Field(default_factory=GuardrailTelemetry)
 
 
 class AskResponse(BaseModel):
@@ -64,3 +80,4 @@ class HealthResponse(BaseModel):
     documents_loaded: int
     chunks_loaded: int
     local_mode: bool
+    guardrails_ready: bool = True

@@ -1,10 +1,22 @@
 from fastapi.testclient import TestClient
+import pytest
 
 from app import main as main_module
+from app.domain.services.guardrails import GuardrailService, RegexPiiRedactor, RuleBasedPromptInjectionDetector
 from app.main import app
 
 
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def use_fast_guardrail_service(monkeypatch) -> None:
+    monkeypatch.setattr(
+        main_module,
+        "guardrail_service",
+        GuardrailService(RegexPiiRedactor(), RuleBasedPromptInjectionDetector(), 0.75),
+    )
+    monkeypatch.setattr(main_module, "guardrails_ready", True)
 
 
 def test_health_endpoint() -> None:
@@ -13,6 +25,7 @@ def test_health_endpoint() -> None:
     assert response.status_code == 200
     body = response.json()
     assert body["status"] == "ok"
+    assert body["guardrails_ready"] is True
     assert body["chunks_loaded"] > 0
 
 
@@ -27,6 +40,10 @@ def test_ask_returns_grounded_answer_with_citations() -> None:
     body = response.json()
     assert body["success"] is True
     assert body["guardrails"]["refused"] is False
+    assert body["telemetry"]["guardrails"]["input_pii_redaction_ms"] >= 0
+    assert body["telemetry"]["guardrails"]["injection_detection_ms"] >= 0
+    assert body["telemetry"]["guardrails"]["deterministic_rules_ms"] >= 0
+    assert body["telemetry"]["guardrails"]["output_pii_redaction_ms"] >= 0
     assert body["citations"]
     assert any("policy_01_annual_leave.md" == item["document"] for item in body["citations"])
     assert "22" in body["answer"]
@@ -42,6 +59,7 @@ def test_ask_refuses_adversarial_prompt() -> None:
     body = response.json()
     assert body["success"] is True
     assert body["guardrails"]["refused"] is True
+    assert body["telemetry"]["guardrails"]["injection_detection_ms"] >= 0
     assert body["citations"] == []
 
 
@@ -61,6 +79,12 @@ def test_ask_refuses_unrelated_general_question() -> None:
 
 def test_ask_validates_empty_question() -> None:
     response = client.post("/ask", json={"question": "", "top_k": 3})
+
+    assert response.status_code == 422
+
+
+def test_ask_validates_whitespace_question() -> None:
+    response = client.post("/ask", json={"question": "   ", "top_k": 3})
 
     assert response.status_code == 422
 

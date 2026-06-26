@@ -1,5 +1,6 @@
 from app.domain.services.chunking import PolicyChunk
 from app.domain.services.chunking import load_policy_chunks
+from app.domain.services.guardrails import GuardrailTimings
 from app.domain.services.rag import RagService
 from app.infrastructure.databases.vector.base import SearchResult
 from app.infrastructure.databases.vector.tfidf import TfidfVectorStore
@@ -94,6 +95,33 @@ def test_rag_answer_includes_inline_chunk_citation() -> None:
     )
 
     assert "[policy_01_annual_leave.md:002]" in answer.answer
+
+
+def test_rag_refuses_when_output_redactor_fails_closed() -> None:
+    service = RagService(
+        FakeRelatedStore(),
+        retrieval_min_score=0.08,
+        ollama_base_url="http://localhost:11434",
+        ollama_default_model="qwen3.5:4b",
+        ollama_timeout_seconds=1.0,
+        ollama_keep_alive="5m",
+    )
+
+    answer = service.answer(
+        "How many annual leave days do full-time employees receive?",
+        top_k=3,
+        redacted_input=False,
+        output_redactor=lambda text: (
+            "I cannot safely process that request because a required guardrail is unavailable.",
+            True,
+            GuardrailTimings(output_pii_redaction_ms=3),
+        ),
+    )
+
+    assert answer.guardrails.refused is True
+    assert answer.guardrails.reason == "guardrail_unavailable"
+    assert answer.citations == []
+    assert answer.output_guardrail_timings.output_pii_redaction_ms == 3
 
 
 def test_rag_expands_vacation_to_annual_leave_allowance() -> None:

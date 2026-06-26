@@ -1,9 +1,10 @@
 from dataclasses import dataclass
+from typing import Callable
 
 from app.domain.services.chunking import PolicyChunk
 from app.domain.services.text_normalization import content_terms
 from app.infrastructure.ai_providers.generation import ExtractiveAnswerGenerator, LlmProvider, OllamaAnswerGenerator
-from app.domain.services.guardrails import apply_output_guardrails, refusal_message
+from app.domain.services.guardrails import GuardrailTimings, apply_output_guardrails, refusal_message
 from app.api.schemas import Citation, GuardrailInfo
 from app.infrastructure.databases.vector.base import RetrievalStore, SearchResult
 
@@ -15,6 +16,7 @@ class RagAnswer:
     guardrails: GuardrailInfo
     retrieved_chunks: int
     retrieval_scores: list[float]
+    output_guardrail_timings: GuardrailTimings = GuardrailTimings()
 
 
 class RagService:
@@ -50,6 +52,7 @@ class RagService:
         question: str,
         top_k: int,
         redacted_input: bool,
+        output_redactor: Callable[[str], tuple[str, bool, GuardrailTimings]] = apply_output_guardrails,
         llm_provider: LlmProvider | None = None,
     ) -> RagAnswer:
         candidate_k = max(top_k * 4, top_k + 5)
@@ -77,7 +80,21 @@ class RagService:
             self._generate_answer(question, relevant, llm_provider),
             relevant[0].chunk.chunk_id,
         )
-        safe_answer, redacted_output = apply_output_guardrails(answer)
+        safe_answer, redacted_output, output_timings = output_redactor(answer)
+        if safe_answer == refusal_message("guardrail_unavailable"):
+            return RagAnswer(
+                answer=safe_answer,
+                citations=[],
+                guardrails=GuardrailInfo(
+                    redacted_input=redacted_input,
+                    redacted_output=redacted_output,
+                    refused=True,
+                    reason="guardrail_unavailable",
+                ),
+                retrieved_chunks=0,
+                retrieval_scores=[round(result.score, 4) for result in relevant],
+                output_guardrail_timings=output_timings,
+            )
         citations = [
             Citation(
                 document=result.chunk.document,
@@ -97,6 +114,7 @@ class RagService:
             ),
             retrieved_chunks=len(relevant),
             retrieval_scores=[round(result.score, 4) for result in relevant],
+            output_guardrail_timings=output_timings,
         )
 
     def _generate_answer(
