@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
 from time import perf_counter
 import logging
 from uuid import uuid4
@@ -27,53 +28,71 @@ from app.infrastructure.databases.vector.tfidf import TfidfVectorStore
 
 configure_logging()
 logger = logging.getLogger("ttb_policy_assistant")
-settings = get_settings()
-retrieval_store = None
-if settings.retrieval_backend == "pgvector":
-    if not settings.database_url:
-        raise RuntimeError("TTB_DATABASE_URL is required when TTB_RETRIEVAL_BACKEND=pgvector")
-    embedding_provider = SentenceTransformerEmbeddingProvider(settings.embedding_model)
-    if embedding_provider.dimension != settings.embedding_dimension:
-        raise RuntimeError(
-            f"Embedding model dimension {embedding_provider.dimension} does not match "
-            f"configured dimension {settings.embedding_dimension}"
-        )
-    pgvector_store = PgVectorStore(settings.database_url, embedding_provider)
-    if settings.bootstrap_on_startup:
-        pgvector_store.bootstrap_if_empty(settings.policies_dir)
-    retrieval_store = pgvector_store
-else:
+
+
+@dataclass
+class AppServices:
+    settings: object
+    rag_service: RagService
+    guardrail_service: object
+    metrics: ServiceMetrics
+    rate_limiter: InMemoryRateLimiter
+    guardrails_ready: bool = False
+
+
+def build_retrieval_store(settings, embedding_provider=None):
+    if settings.retrieval_backend == "pgvector":
+        if not settings.database_url:
+            raise RuntimeError("TTB_DATABASE_URL is required when TTB_RETRIEVAL_BACKEND=pgvector")
+        provider = embedding_provider or SentenceTransformerEmbeddingProvider(settings.embedding_model)
+        if provider.dimension != settings.embedding_dimension:
+            raise RuntimeError(
+                f"Embedding model dimension {provider.dimension} does not match "
+                f"configured dimension {settings.embedding_dimension}"
+            )
+        pgvector_store = PgVectorStore(settings.database_url, provider)
+        if settings.bootstrap_on_startup:
+            pgvector_store.bootstrap_if_empty(settings.policies_dir)
+        return pgvector_store
+
     chunks = load_policy_chunks(settings.policies_dir)
-    retrieval_store = TfidfVectorStore(chunks)
-
-rag_service = RagService(
-    retrieval_store,
-    settings.retrieval_min_score,
-    settings.ollama_base_url,
-    settings.ollama_default_model,
-    settings.ollama_timeout_seconds,
-    settings.ollama_keep_alive,
-    settings.ollama_num_predict,
-    settings.ollama_num_ctx,
-    settings.ollama_context_top_k,
-)
-guardrail_service = build_guardrail_service(
-    settings.prompt_injection_model,
-    settings.prompt_injection_threshold,
-    settings.prompt_injection_malicious_label_pattern,
-)
-
-metrics = ServiceMetrics()
-rate_limiter = InMemoryRateLimiter()
-guardrails_ready = False
+    return TfidfVectorStore(chunks)
 
 
-def custom_openapi():
+def build_app_services(settings=None, retrieval_store=None, embedding_provider=None) -> AppServices:
+    active_settings = settings or get_settings()
+    active_store = retrieval_store or build_retrieval_store(active_settings, embedding_provider)
+    rag_service = RagService(
+        active_store,
+        active_settings.retrieval_min_score,
+        active_settings.ollama_base_url,
+        active_settings.ollama_default_model,
+        active_settings.ollama_timeout_seconds,
+        active_settings.ollama_keep_alive,
+        active_settings.ollama_num_predict,
+        active_settings.ollama_num_ctx,
+        active_settings.ollama_context_top_k,
+    )
+    guardrail_service = build_guardrail_service(
+        active_settings.prompt_injection_model,
+        active_settings.prompt_injection_threshold,
+        active_settings.prompt_injection_malicious_label_pattern,
+    )
+    return AppServices(
+        settings=active_settings,
+        rag_service=rag_service,
+        guardrail_service=guardrail_service,
+        metrics=ServiceMetrics(),
+        rate_limiter=InMemoryRateLimiter(),
+    )
+
+
+def custom_openapi(app: FastAPI, services: AppServices):
     if app.openapi_schema:
         return app.openapi_schema
 
     openapi_schema = get_openapi(
-        title=settings.app_name,
+        title=services.settings.app_name,
         version="0.1.0",
         routes=app.routes,
     )
@@ -86,15 +105,13 @@ def custom_openapi():
     openapi_schema["paths"]["/ask"]["post"]["requestBody"]["content"]["application/json"][
         "example"
     ] = ask_example
-    app.openapi_schema = openapi_schema
-    return app.openapi_schema
+    return openapi_schema
 
 
-def warm_up_guardrails() -> None:
-    global guardrails_ready
+def warm_up_guardrails(services: AppServices) -> None:
     started = perf_counter()
-    timings = guardrail_service.warm_up()
-    guardrails_ready = True
+    timings = services.guardrail_service.warm_up()
+    services.guardrails_ready = True
     logger.info(
         "guardrails.warmed",
         extra={
@@ -109,135 +126,150 @@ def warm_up_guardrails() -> None:
     )
 
 
-@asynccontextmanager
-async def lifespan(_app: FastAPI):
-    warm_up_guardrails()
-    yield
+def create_app(
+    settings=None,
+    retrieval_store=None,
+    embedding_provider=None,
+    guardrail_service_override=None,
+    warmup_guardrails: bool = True,
+) -> FastAPI:
+    services = build_app_services(settings, retrieval_store, embedding_provider)
+    if guardrail_service_override is not None:
+        services.guardrail_service = guardrail_service_override
 
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI):
+        if warmup_guardrails:
+            warm_up_guardrails(services)
+        yield
 
-app = FastAPI(title=settings.app_name, version="0.1.0", lifespan=lifespan)
-app.openapi = custom_openapi
-
-
-@app.get("/health", response_model=HealthResponse)
-def health() -> HealthResponse:
-    chunks = rag_service.chunks
-    documents = {chunk.document for chunk in chunks}
-    return HealthResponse(
-        status="ok",
-        retrieval_backend=settings.retrieval_backend,
-        documents_loaded=len(documents),
-        chunks_loaded=len(chunks),
-        local_mode=settings.local_mode,
-        guardrails_ready=guardrails_ready,
+    app = FastAPI(
+        title=services.settings.app_name,
+        version="0.1.0",
+        lifespan=lifespan,
     )
+    app.state.services = services
+    app.openapi = lambda: custom_openapi(app, services)
 
+    @app.get("/health", response_model=HealthResponse)
+    def health() -> HealthResponse:
+        chunks = services.rag_service.chunks
+        documents = {chunk.document for chunk in chunks}
+        return HealthResponse(
+            status="ok",
+            retrieval_backend=services.settings.retrieval_backend,
+            documents_loaded=len(documents),
+            chunks_loaded=len(chunks),
+            local_mode=services.settings.local_mode,
+            guardrails_ready=services.guardrails_ready,
+        )
 
-@app.post("/ask", response_model=AskResponse)
-def ask(
-    request: AskRequest,
-    response: Response,
-    http_request: Request,
-) -> AskResponse:
-    started = perf_counter()
-    request_id = str(uuid4())
-    response.headers["X-Request-ID"] = request_id
-    _check_rate_limit(http_request)
-    input_guardrail = guardrail_service.apply_input(request.question)
+    @app.post("/ask", response_model=AskResponse)
+    def ask(
+        request: AskRequest,
+        response: Response,
+        http_request: Request,
+    ) -> AskResponse:
+        started = perf_counter()
+        request_id = str(uuid4())
+        response.headers["X-Request-ID"] = request_id
+        _check_rate_limit(http_request, services)
+        input_guardrail = services.guardrail_service.apply_input(request.question)
 
-    if input_guardrail.refused:
-        answer = refusal_message(input_guardrail.reason)
+        if input_guardrail.refused:
+            answer = refusal_message(input_guardrail.reason)
+            telemetry = _telemetry(
+                request_id=request_id,
+                started=started,
+                question=input_guardrail.text,
+                answer=answer,
+                retrieved_chunks=0,
+                guardrail_timings=input_guardrail.timings,
+            )
+            logger.info(
+                "ask.refused",
+                extra={
+                    "request_id": request_id,
+                    "reason": input_guardrail.reason,
+                    "latency_ms": telemetry.latency_ms,
+                    "retrieval_backend": services.settings.retrieval_backend,
+                    "top_k": request.top_k,
+                    "guardrail_timings": telemetry.guardrails.model_dump(),
+                },
+            )
+            services.metrics.record_request(telemetry.latency_ms, input_guardrail.reason)
+            return AskResponse(
+                success=True,
+                answer=answer,
+                citations=[],
+                guardrails=GuardrailInfo(
+                    redacted_input=input_guardrail.redacted,
+                    redacted_output=False,
+                    refused=True,
+                    reason=input_guardrail.reason,
+                ),
+                telemetry=telemetry,
+            )
+
+        rag_answer = services.rag_service.answer(
+            question=input_guardrail.text,
+            top_k=request.top_k,
+            redacted_input=input_guardrail.redacted,
+            output_redactor=services.guardrail_service.apply_output,
+            llm_provider=request.llm_provider,
+        )
         telemetry = _telemetry(
             request_id=request_id,
             started=started,
             question=input_guardrail.text,
-            answer=answer,
-            retrieved_chunks=0,
-            guardrail_timings=input_guardrail.timings,
+            answer=rag_answer.answer,
+            retrieved_chunks=rag_answer.retrieved_chunks,
+            guardrail_timings=_combine_guardrail_timings(
+                input_guardrail.timings,
+                rag_answer.output_guardrail_timings,
+            ),
         )
         logger.info(
-            "ask.refused",
+            "ask.completed",
             extra={
                 "request_id": request_id,
-                "reason": input_guardrail.reason,
                 "latency_ms": telemetry.latency_ms,
-                "retrieval_backend": settings.retrieval_backend,
+                "input_tokens": telemetry.input_tokens,
+                "output_tokens": telemetry.output_tokens,
+                "retrieved_chunks": telemetry.retrieved_chunks,
+                "retrieval_backend": services.settings.retrieval_backend,
                 "top_k": request.top_k,
+                "llm_provider": request.llm_provider or "extractive",
+                "citation_chunk_ids": [citation.chunk_id for citation in rag_answer.citations],
+                "retrieval_scores": rag_answer.retrieval_scores,
+                "guardrail_reason": rag_answer.guardrails.reason,
+                "refused": rag_answer.guardrails.refused,
+                "injection_score": input_guardrail.injection_score,
                 "guardrail_timings": telemetry.guardrails.model_dump(),
             },
         )
-        metrics.record_request(telemetry.latency_ms, input_guardrail.reason)
+        services.metrics.record_request(telemetry.latency_ms, rag_answer.guardrails.reason)
         return AskResponse(
             success=True,
-            answer=answer,
-            citations=[],
-            guardrails=GuardrailInfo(
-                redacted_input=input_guardrail.redacted,
-                redacted_output=False,
-                refused=True,
-                reason=input_guardrail.reason,
-            ),
+            answer=rag_answer.answer,
+            citations=rag_answer.citations,
+            guardrails=rag_answer.guardrails,
             telemetry=telemetry,
         )
 
-    rag_answer = rag_service.answer(
-        question=input_guardrail.text,
-        top_k=request.top_k,
-        redacted_input=input_guardrail.redacted,
-        output_redactor=guardrail_service.apply_output,
-        llm_provider=request.llm_provider,
-    )
-    telemetry = _telemetry(
-        request_id=request_id,
-        started=started,
-        question=input_guardrail.text,
-        answer=rag_answer.answer,
-        retrieved_chunks=rag_answer.retrieved_chunks,
-        guardrail_timings=_combine_guardrail_timings(
-            input_guardrail.timings,
-            rag_answer.output_guardrail_timings,
-        ),
-    )
-    logger.info(
-        "ask.completed",
-        extra={
-            "request_id": request_id,
-            "latency_ms": telemetry.latency_ms,
-            "input_tokens": telemetry.input_tokens,
-            "output_tokens": telemetry.output_tokens,
-            "retrieved_chunks": telemetry.retrieved_chunks,
-            "retrieval_backend": settings.retrieval_backend,
-            "top_k": request.top_k,
-            "llm_provider": request.llm_provider or "extractive",
-            "citation_chunk_ids": [citation.chunk_id for citation in rag_answer.citations],
-            "retrieval_scores": rag_answer.retrieval_scores,
-            "guardrail_reason": rag_answer.guardrails.reason,
-            "refused": rag_answer.guardrails.refused,
-            "injection_score": input_guardrail.injection_score,
-            "guardrail_timings": telemetry.guardrails.model_dump(),
-        },
-    )
-    metrics.record_request(telemetry.latency_ms, rag_answer.guardrails.reason)
-    return AskResponse(
-        success=True,
-        answer=rag_answer.answer,
-        citations=rag_answer.citations,
-        guardrails=rag_answer.guardrails,
-        telemetry=telemetry,
-    )
+    @app.get("/metrics")
+    def service_metrics() -> Response:
+        return Response(
+            content=services.metrics.render_prometheus(services.settings.retrieval_backend),
+            media_type="text/plain; version=0.0.4",
+        )
+
+    return app
 
 
-@app.get("/metrics")
-def service_metrics() -> Response:
-    return Response(
-        content=metrics.render_prometheus(settings.retrieval_backend),
-        media_type="text/plain; version=0.0.4",
-    )
-
-
-def _check_rate_limit(request: Request) -> None:
+def _check_rate_limit(request: Request, services: AppServices) -> None:
     client = request.client.host if request.client else "unknown"
-    if not rate_limiter.allow(client, settings.rate_limit_per_minute):
+    if not services.rate_limiter.allow(client, services.settings.rate_limit_per_minute):
         raise HTTPException(status_code=429, detail="Rate limit exceeded")
 
 
@@ -278,3 +310,6 @@ def _combine_guardrail_timings(
         deterministic_rules_ms=input_timings.deterministic_rules_ms,
         output_pii_redaction_ms=output_timings.output_pii_redaction_ms,
     )
+
+
+app = create_app()

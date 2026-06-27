@@ -159,10 +159,17 @@ The tests cover:
 - prompt-injection refusal
 - out-of-scope sensitive-data refusal
 - `/ask` integration behavior
+- app-factory wiring for isolated TF-IDF and pgvector test apps
 - request validation
-- optional pgvector upsert/search integration when `TTB_TEST_DATABASE_URL` is set
+- pgvector upsert/search integration when `TTB_TEST_DATABASE_URL` is set
+- `/ask` integration behavior through a real pgvector store with deterministic test embeddings
 - IP-based rate limiting
 - metrics output
+
+Local `pytest` skips pgvector integration tests unless `TTB_TEST_DATABASE_URL`
+points at a pgvector-enabled PostgreSQL database. In GitHub Actions, the same
+tests fail instead of skipping if that URL is missing, so CI cannot silently lose
+coverage for the production retrieval backend.
 
 ## Evaluation Harness
 
