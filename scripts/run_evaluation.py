@@ -6,13 +6,14 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.domain.services.guardrails import apply_input_guardrails
-from app.main import rag_service
+from app.main import app
 
 
 MIN_GROUNDED_ANSWER_RATE = 0.9
 MIN_CITATION_HIT_RATE = 0.9
 MIN_TERM_HIT_RATE = 0.8
 RESULTS_PATH = Path("data/eval/latest_results.json")
+rag_service = app.state.services.rag_service
 
 
 def main() -> None:
